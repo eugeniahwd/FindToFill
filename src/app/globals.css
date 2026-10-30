@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --color-page-tint: #F8F9FB;
+  --color-navy: #011638;
+  --color-teal: #00628C;
+  --color-blue-chip: #C8E6FF;
+  --color-yellow: #FFD233;
+
+  /* Status Colors */
+  --color-status-available: #2E7D32;
+  --color-status-available-bg: #E8F5E9;
+  --color-status-empty: #9A6700;
+  --color-status-empty-accent: #FFD233;
+  --color-status-empty-bg: #FFF8D6;
+  --color-status-broken: #BA1A1A;
+  --color-status-broken-bg: #FDECEA;
+  --color-status-maintenance: #607D8B;
+  --color-status-maintenance-bg: #ECEFF1;
+  --color-status-neutral: #6B7280;
+  --color-status-neutral-bg: #F3F4F6;
+}
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+html, body {
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  background-color: #F8F9FB;
+  color: #011638;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+
+/* Inputs at 16px font size so iOS does not zoom */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* Min touch target size */
+.min-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Leaflet container */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+}
