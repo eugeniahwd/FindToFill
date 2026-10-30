@@ -1,11 +1,11 @@
-# FindToFill 🚰⚡
+# FindToFill
 
 > **"Find it. Fill it."**
 > A mobile-first web app for KRL Commuter Line passengers (Jabodetabek) to quickly find working water refill dispensers and charging stations inside stations.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Framework**: Next.js 15 (App Router, Strict TypeScript)
 - **Styling**: Tailwind CSS (Mobile-first responsive design, Inter font)
@@ -15,7 +15,7 @@
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
