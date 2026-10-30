@@ -1,103 +1,167 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useEffect, useState, useMemo } from 'react';
+import { MessageSquareText, Sparkles, MapPin, ChevronRight, User } from 'lucide-react';
+import { Logo } from '@/components/common/Logo';
+import { StationHeader } from '@/components/layout/StationHeader';
+import { FilterChips, FilterValue } from '@/components/common/FilterChips';
+import { FacilityCard } from '@/components/facility/FacilityCard';
+import { MapView } from '@/components/map/MapView';
+import { EmptyState } from '@/components/common/EmptyState';
+import { FacilityCardSkeleton } from '@/components/common/LoadingSkeleton';
+import { useLocation } from '@/context/LocationContext';
+import { useAuth } from '@/context/AuthContext';
+import { stationService } from '@/lib/services/stationService';
+import { FacilityWithStatus } from '@/lib/types';
+
+export default function HomePage() {
+  const { selectedStation, coords } = useLocation();
+  const { user } = useAuth();
+
+  const [facilities, setFacilities] = useState<FacilityWithStatus[]>([]);
+  const [filter, setFilter] = useState<FilterValue>('all');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadStationFacilities() {
+      setIsLoading(true);
+      try {
+        const data = await stationService.getStationFacilities(
+          selectedStation.id,
+          coords
+        );
+        if (isMounted) {
+          // Sort by distance ascending
+          const sorted = [...data].sort((a, b) => {
+            const distA = a.distanceMeters ?? Infinity;
+            const distB = b.distanceMeters ?? Infinity;
+            return distA - distB;
+          });
+          setFacilities(sorted);
+        }
+      } catch (err) {
+        console.error('Failed to load facilities', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    }
+    loadStationFacilities();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedStation.id, coords]);
+
+  // Filter facilities based on selected chip
+  const filteredFacilities = useMemo(() => {
+    return facilities.filter((fac) => {
+      if (filter === 'water') return fac.type === 'water';
+      if (filter === 'charging') return fac.type === 'charging';
+      if (filter === 'available') return fac.currentStatus === 'available';
+      return true; // 'all'
+    });
+  }, [facilities, filter]);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="flex-1 flex flex-col p-4 gap-4">
+      {/* Top Bar: Logo & Profile Avatar */}
+      <header className="flex items-center justify-between pt-1">
+        <Logo size="sm" />
+        <a
+          href="/profile"
+          className="min-touch-target flex items-center gap-1.5 py-1 px-2.5 rounded-full bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+          aria-label="Profil Pengguna"
+        >
+          <div className="w-6 h-6 rounded-full bg-[#00628C] text-white flex items-center justify-center text-xs font-bold">
+            {user ? user.displayName.slice(0, 1).toUpperCase() : <User size={13} />}
+          </div>
+          <span className="text-xs font-semibold max-w-[80px] truncate text-navy">
+            {user ? user.displayName.split(' ')[0] : 'Tamu'}
+          </span>
+        </a>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
+      {/* Current Station Header Card */}
+      <StationHeader />
+
+      {/* Interactive Map Preview Card */}
+      <section
+        aria-label="Peta Stasiun"
+        className="rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-xs relative"
+      >
+        <MapView
+          center={[selectedStation.latitude, selectedStation.longitude]}
+          zoom={16}
+          facilities={filteredFacilities}
+          userCoords={coords}
+          className="h-44 w-full"
+        />
+        <div className="p-2.5 bg-white flex items-center justify-between border-t border-slate-100">
+          <span className="text-xs font-bold text-navy flex items-center gap-1">
+            <MapPin size={14} className="text-[#00628C]" />
+            Area Stasiun {selectedStation.name}
+          </span>
           <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`/stations/${selectedStation.id}`}
+            className="min-touch-target text-xs font-semibold text-[#00628C] hover:underline flex items-center gap-0.5"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
+            <span>Denah & Detail</span>
+            <ChevronRight size={14} />
           </a>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+      </section>
+
+      {/* Filter Chips */}
+      <section aria-label="Filter Tipe Fasilitas">
+        <FilterChips selected={filter} onChange={setFilter} />
+      </section>
+
+      {/* Nearest Facilities List */}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-navy flex items-center gap-1.5">
+            <Sparkles size={16} className="text-[#9A6700]" />
+            <span>Nearest Facilities</span>
+          </h2>
+          <span className="text-[11px] font-medium text-slate-500">
+            {filteredFacilities.length} fasilitas ditemukan
+          </span>
+        </div>
+
+        {isLoading ? (
+          <div className="flex flex-col gap-3">
+            <FacilityCardSkeleton />
+            <FacilityCardSkeleton />
+          </div>
+        ) : filteredFacilities.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {filteredFacilities.map((facility) => (
+              <FacilityCard key={facility.id} facility={facility} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="Tidak Ada Fasilitas Sesuai Filter"
+            message={`Belum ada fasilitas dengan status '${filter}' di Stasiun ${selectedStation.name}.`}
+            actionLabel="Tampilkan Semua Fasilitas"
+            onAction={() => setFilter('all')}
           />
-          Learn
-        </a>
+        )}
+      </section>
+
+      {/* Floating Chatbot Assistant Button */}
+      <div className="sticky bottom-20 self-end z-30 -mt-12 pointer-events-none">
         <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/chatbot"
+          aria-label="Buka AI Asisten Chatbot"
+          className="pointer-events-auto min-touch-target flex items-center gap-2 py-2.5 px-4 rounded-full bg-[#011638] text-white shadow-xl hover:bg-[#002255] active:scale-95 transition-all border-2 border-white"
         >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
+          <div className="w-6 h-6 rounded-full bg-[#FFD233] text-[#011638] flex items-center justify-center font-bold">
+            <MessageSquareText size={15} />
+          </div>
+          <span className="text-xs font-bold">Tanya AI</span>
         </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
