@@ -1,5 +1,4 @@
 import { ChatResponse, QuickMessageId } from '../types';
-import { MOCK_STATIONS } from '../mock/data';
 import { stationService } from './stationService';
 import { findNearestStation } from '../utils/geo';
 import { reviewService } from './reviewService';
@@ -23,16 +22,24 @@ export const chatbotService = {
       };
     }
 
-    // Determine current station
-    let targetStation = MOCK_STATIONS[0]; // default to Manggarai
+    // Determine current station (pilot stations from the database)
+    const stations = (await stationService.getStations()).filter((s) => s.isPilot);
+    if (stations.length === 0) {
+      return {
+        outcome: 'fallback_no_data',
+        message: 'Data stasiun belum tersedia. Silakan cek peta stasiun.',
+        generatedAt: new Date().toISOString(),
+      };
+    }
+    let targetStation = stations[0];
     if (overrideStationId) {
-      const match = MOCK_STATIONS.find((s) => s.id === overrideStationId);
+      const match = stations.find((s) => s.id === overrideStationId);
       if (match) targetStation = match;
     } else if (coords) {
       const nearest = findNearestStation(
         coords.latitude,
         coords.longitude,
-        MOCK_STATIONS
+        stations
       );
       if (nearest) targetStation = nearest.station;
     }

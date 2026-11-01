@@ -15,7 +15,7 @@ import { reviewService } from '@/lib/services/reviewService';
 import { communityService } from '@/lib/services/communityService';
 import { stationService } from '@/lib/services/stationService';
 import { Review, Station, FacilityWithStatus, Stamp } from '@/lib/types';
-import { MOCK_STATIONS } from '@/lib/mock/data';
+import { useLocation } from '@/context/LocationContext';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { EmptyState } from '@/components/common/EmptyState';
 import { formatTimeAgo } from '@/lib/utils/status';
@@ -23,9 +23,11 @@ import { formatTimeAgo } from '@/lib/utils/status';
 export default function CommunityPage() {
   const { user, requireAuth } = useAuth();
   const { showToast } = useToast();
+  // Pilot stations from the database (LocationProvider renders only after they load).
+  const { stations } = useLocation();
 
   const [activeTab, setActiveTab] = useState<'reviews' | 'favorites' | 'stamps'>('reviews');
-  const [selectedStationId, setSelectedStationId] = useState<string>(MOCK_STATIONS[0].id);
+  const [selectedStationId, setSelectedStationId] = useState<string>(stations[0]?.id ?? '');
 
   // Reviews state
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -131,9 +133,11 @@ export default function CommunityPage() {
   const stampedStationIds = new Set(
     userStamps.map((s) => s.stationId).filter(Boolean)
   );
-  const totalPilotStations = MOCK_STATIONS.length;
+  const totalPilotStations = stations.length;
   const stampedCount = stampedStationIds.size;
-  const progressPercent = Math.round((stampedCount / totalPilotStations) * 100);
+  const progressPercent = totalPilotStations
+    ? Math.round((stampedCount / totalPilotStations) * 100)
+    : 0;
 
   return (
     <div className="flex-1 flex flex-col p-4 gap-4 pb-16">
@@ -193,7 +197,7 @@ export default function CommunityPage() {
         <div className="flex flex-col gap-3.5">
           {/* Station Selector Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
-            {MOCK_STATIONS.map((st) => (
+            {stations.map((st) => (
               <button
                 key={st.id}
                 onClick={() => setSelectedStationId(st.id)}
@@ -348,7 +352,7 @@ export default function CommunityPage() {
               title="Belum Ada Stasiun Favorit"
               message="Buka halaman stasiun dan ketuk ikon hati untuk menyimpannya di sini."
               actionLabel="Jelajahi Stasiun"
-              onAction={() => setSelectedStationId(MOCK_STATIONS[0].id)}
+              onAction={() => setSelectedStationId(stations[0]?.id ?? '')}
             />
           )}
         </div>
@@ -391,7 +395,7 @@ export default function CommunityPage() {
 
           {/* Grid of Pilot Stations: Tried (filled) vs Untried (outlined) */}
           <div className="grid grid-cols-1 gap-3">
-            {MOCK_STATIONS.map((station) => {
+            {stations.map((station) => {
               const isStamped = user ? stampedStationIds.has(station.id) : false;
 
               return (
