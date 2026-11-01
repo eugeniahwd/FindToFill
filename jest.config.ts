@@ -10,8 +10,10 @@ const config: Config = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
+    '^server-only$': '<rootDir>/tests/mocks/server-only.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
+  testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/tests/mocks/'],
 };
 
 export default createJestConfig(config);

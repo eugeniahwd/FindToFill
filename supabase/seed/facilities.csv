@@ -1,0 +1,11 @@
+station_name,type,name,platform,location_detail,level,latitude,longitude,layout_x,layout_y,is_active,is_demo_data
+Manggarai,water,Water Station Concourse L2,Near Gate Timur,"Beside escalator to platforms 6-7, concourse level 2",L2,-6.20982,106.85022,52,42,true,true
+Manggarai,charging,Charging Corner Platform 1-2,Platform 1-2,Center pillar near waiting benches towards Bogor,L1,-6.20972,106.85012,28,65,true,true
+Manggarai,water,Water Station Platform 9-10,Platform 9-10,Near priority lift towards Bekasi / Cikarang,L2,-6.20995,106.85031,74,30,true,true
+Manggarai,charging,Charging Station West Gate,West Exit,Next to the daily ticket counter,L1,-6.20961,106.84998,18,82,true,true
+Tebet,water,Water Dispenser Gate A,East Exit Gate,"Next to the station prayer room, near tap-out gates",L1,-6.22661,106.85822,45,38,true,true
+Tebet,charging,Charging Box Platform 1,Platform 1 (towards Manggarai / Jakarta Kota),Under the canopy near the women-only car,L1,-6.22672,106.85834,68,60,true,true
+Tebet,water,Water Station Platform 2,Platform 2 (towards Bogor),Middle of platform near the underpass stairs,L1,-6.22652,106.85815,30,72,true,true
+Sudirman,water,Water Station Kendal Tunnel,Tunnel Entrance,"Front of the MRT Dukuh Atas integration area",L1,-6.20235,106.82355,55,45,true,true
+Sudirman,charging,Charging Tower Main Hall,Central Concourse,Charging pillar near Customer Care,L1,-6.20248,106.82368,40,58,true,true
+Sudirman,water,Water Dispenser Platform towards Manggarai,Platform 2,Next to the station health post,L1,-6.20228,106.82348,75,68,true,true

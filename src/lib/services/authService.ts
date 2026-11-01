@@ -1,65 +1,69 @@
+import type { User as AuthUser } from '@supabase/supabase-js';
 import { User } from '../types';
-import { MOCK_USERS } from '../mock/data';
+import { getSupabaseBrowserClient } from '../supabase/client';
+import { isSupabaseConfigured } from '../supabase/env';
+import { toUserRole } from '../auth/roles';
 
-const AUTH_STORAGE_KEY = 'findtofill_mock_user';
+async function loadUser(authUser: AuthUser): Promise<User> {
+  const supabase = getSupabaseBrowserClient();
+  const email = authUser.email ?? '';
+  // RLS: a user can read only their own profile row.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('display_name, role')
+    .eq('id', authUser.id)
+    .maybeSingle();
+
+  return {
+    id: authUser.id,
+    email,
+    displayName: profile?.display_name || email.split('@')[0],
+    role: toUserRole(profile?.role),
+  };
+}
+
+function requirePassword(password?: string): string {
+  if (!password) throw new Error('Password is required.');
+  return password;
+}
 
 export const authService = {
-  // TODO(backend): Replace with supabase.auth.signInWithPassword({ email, password })
-  async login(email: string, _password?: string): Promise<User> {
-    void _password;
-    await new Promise((r) => setTimeout(r, 400));
-    const normalized = email.toLowerCase().trim();
-    
-    // Check if it matches predefined demo users
-    const match = MOCK_USERS.find((u) => u.email.toLowerCase() === normalized);
-    const user: User = match || {
-      id: `user-${Date.now()}`,
-      email: normalized,
-      displayName: normalized.split('@')[0],
-      role: 'commuter',
-    };
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-    }
-    return user;
+  async login(email: string, password?: string): Promise<User> {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.toLowerCase().trim(),
+      password: requirePassword(password),
+    });
+    if (error || !data.user) throw new Error(error?.message ?? 'Login failed.');
+    return loadUser(data.user);
   },
 
-  // TODO(backend): Replace with supabase.auth.signUp({ email, password, options: { data: { display_name } } })
-  async register(email: string, _password?: string, displayName?: string): Promise<User> {
-    void _password;
-    await new Promise((r) => setTimeout(r, 400));
-    const normalized = email.toLowerCase().trim();
-    const user: User = {
-      id: `user-${Date.now()}`,
-      email: normalized,
-      displayName: displayName?.trim() || normalized.split('@')[0],
-      role: 'commuter',
-    };
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  async register(email: string, password?: string, displayName?: string): Promise<User> {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.signUp({
+      email: email.toLowerCase().trim(),
+      password: requirePassword(password),
+      // Read by the handle_new_user trigger to fill profiles.display_name.
+      options: { data: { display_name: displayName?.trim() || undefined } },
+    });
+    if (error || !data.user) throw new Error(error?.message ?? 'Registration failed.');
+    if (!data.session) {
+      // "Confirm email" is enabled in Supabase Auth settings.
+      throw new Error('Check your email to confirm your account, then log in.');
     }
-    return user;
+    return loadUser(data.user);
   },
 
-  // TODO(backend): Replace with supabase.auth.getUser() and profile fetch
   async getCurrentUser(): Promise<User | null> {
-    if (typeof window === 'undefined') return null;
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as User;
-    } catch {
-      return null;
-    }
+    if (typeof window === 'undefined' || !isSupabaseConfigured()) return null;
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return null;
+    return loadUser(data.user);
   },
 
-  // TODO(backend): Replace with supabase.auth.signOut()
   async logout(): Promise<void> {
-    await new Promise((r) => setTimeout(r, 200));
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-    }
+    if (!isSupabaseConfigured()) return;
+    await getSupabaseBrowserClient().auth.signOut();
   },
 };
