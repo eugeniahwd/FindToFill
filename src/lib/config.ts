@@ -10,6 +10,9 @@ export const APP_CONFIG = {
   ACTIVE_REPORT_WINDOW_DAYS: 7,
   ACTIVE_REPORT_WINDOW_MS: 7 * 24 * 60 * 60 * 1000,
   
+  // Report photos are in a private bucket; links are short-lived signed URLs.
+  SIGNED_PHOTO_URL_TTL_S: 60 * 60,
+
   // Rate Limits
   MAX_REPORTS_PER_HOUR: 5,
   MAX_CHAT_PER_HOUR: 20,

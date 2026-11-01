@@ -87,6 +87,11 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 | `src/lib/auth/` | `requireUser` / `requireAdmin` guards |
 | `GET /api/health` | Checks the database is reachable (also wakes a paused free project before a demo) |
 | `GET /api/me` | Current user and role, or `{ user: null }` for guests |
+| `GET /api/stations` | All stations with center coordinates |
+| `GET /api/stations/:id` | One station and its layouts |
+| `GET /api/stations/:id/facilities` | Active facilities with current status (7-day window). No distances: the browser adds them with `rankFacilities()` from `src/lib/utils/locator.ts`, so GPS coordinates never reach the server |
+| `GET /api/facilities/:id` | One active facility with current status |
+| `src/lib/data/` | Server data access (`stations.ts`, signed photo URLs in `photos.ts`), reusable by the chatbot tools |
 
 **Manual setup (once per team):**
 
