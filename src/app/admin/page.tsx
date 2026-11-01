@@ -16,7 +16,7 @@ import { reportService } from '@/lib/services/reportService';
 import { reviewService } from '@/lib/services/reviewService';
 import { stationService } from '@/lib/services/stationService';
 import { Report, Review, Station, FacilityWithStatus, Facility } from '@/lib/types';
-import { MOCK_STATIONS } from '@/lib/mock/data';
+import { useLocation } from '@/context/LocationContext';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { BottomSheet } from '@/components/common/BottomSheet';
 import { formatTimeAgo } from '@/lib/utils/status';
@@ -25,13 +25,14 @@ export default function AdminPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { stations: pilotStations } = useLocation();
 
   const [activeTab, setActiveTab] = useState<'reports' | 'stations'>('reports');
   const [reports, setReports] = useState<Report[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [facilities, setFacilities] = useState<FacilityWithStatus[]>([]);
-  const [selectedStationId, setSelectedStationId] = useState<string>(MOCK_STATIONS[0].id);
+  const [selectedStationId, setSelectedStationId] = useState<string>(pilotStations[0]?.id ?? '');
 
   // Edit facility modal
   const [editingFacility, setEditingFacility] = useState<Facility | null>(null);

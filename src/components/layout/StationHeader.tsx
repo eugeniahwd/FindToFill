@@ -4,7 +4,6 @@ import React from 'react';
 import { MapPin, ChevronDown, AlertCircle } from 'lucide-react';
 import { useLocation } from '@/context/LocationContext';
 import { BottomSheet } from '../common/BottomSheet';
-import { MOCK_STATIONS } from '@/lib/mock/data';
 
 interface StationHeaderProps {
   className?: string;
@@ -12,6 +11,7 @@ interface StationHeaderProps {
 
 export const StationHeader: React.FC<StationHeaderProps> = ({ className = '' }) => {
   const {
+    stations,
     selectedStation,
     selectStation,
     isFarFromPilotStations,
@@ -76,7 +76,7 @@ export const StationHeader: React.FC<StationHeaderProps> = ({ className = '' }) 
         description="Fasilitas water dispenser dan charging station saat ini tersedia di stasiun uji coba berikut:"
       >
         <div className="flex flex-col gap-2">
-          {MOCK_STATIONS.map((st) => {
+          {stations.map((st) => {
             const isSelected = selectedStation.id === st.id;
             return (
               <button

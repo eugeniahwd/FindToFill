@@ -1,140 +1,94 @@
-import {
-  Station,
-  Facility,
-  StationLayout,
-  FacilityWithStatus,
-} from '../types';
-import {
-  MOCK_STATIONS,
-  MOCK_FACILITIES,
-  MOCK_LAYOUTS,
-  MOCK_REPORTS,
-} from '../mock/data';
-import { resolveFacilityStatus } from '../utils/status';
-import { calculateHaversineDistance, calculateWalkTimeMinutes } from '../utils/geo';
+import { Station, Facility, StationLayout, FacilityWithStatus } from '../types';
+import { withDistances, type Coordinates } from '../utils/locator';
+import { apiRequest, isMissing } from './apiClient';
 
-// In-memory mock store for dynamic updates during session
-const dynamicStations: Station[] = [...MOCK_STATIONS];
-const dynamicFacilities: Facility[] = [...MOCK_FACILITIES];
+// Distances are computed here in the browser, so GPS coordinates are never sent to the server.
 
 export const stationService = {
-  // TODO(backend): Replace with supabase.from('stations').select('*').order('name')
   async getStations(): Promise<Station[]> {
-    await new Promise((r) => setTimeout(r, 150));
-    return [...dynamicStations];
+    const { stations } = await apiRequest<{ stations: Station[] }>('/api/stations');
+    return stations;
   },
 
-  // TODO(backend): Replace with supabase.from('stations').select('*').eq('id', id).single()
   async getStationById(id: string): Promise<Station | null> {
-    await new Promise((r) => setTimeout(r, 100));
-    const station = dynamicStations.find((s) => s.id === id);
-    return station || null;
+    try {
+      const { station } = await apiRequest<{ station: Station }>(`/api/stations/${encodeURIComponent(id)}`);
+      return station;
+    } catch (err) {
+      if (isMissing(err)) return null;
+      throw err;
+    }
   },
 
-  // TODO(backend): Replace with supabase.from('station_layouts').select('*').eq('station_id', stationId)
   async getStationLayouts(stationId: string): Promise<StationLayout[]> {
-    await new Promise((r) => setTimeout(r, 100));
-    return MOCK_LAYOUTS.filter((l) => l.stationId === stationId);
+    try {
+      const { layouts } = await apiRequest<{ layouts: StationLayout[] }>(
+        `/api/stations/${encodeURIComponent(stationId)}`,
+      );
+      return layouts;
+    } catch (err) {
+      if (isMissing(err)) return [];
+      throw err;
+    }
   },
 
-  // TODO(backend): Replace with supabase.from('facility_status').select('*, facilities(*)')
+  /** Active facilities with current status; adds distanceMeters/walkTimeMin when coords are given. */
   async getStationFacilities(
     stationId: string,
-    userCoords?: { latitude: number; longitude: number } | null
+    userCoords?: Coordinates | null,
   ): Promise<FacilityWithStatus[]> {
-    await new Promise((r) => setTimeout(r, 200));
-    const rawFacilities = dynamicFacilities.filter(
-      (f) => f.stationId === stationId && f.isActive
-    );
-
-    return rawFacilities.map((fac) => {
-      const facReports = MOCK_REPORTS.filter((r) => r.facilityId === fac.id);
-      const { status, lastReportedAt, lastPhotoUrl, activeReportCount } =
-        resolveFacilityStatus(facReports);
-
-      let distanceMeters: number | undefined;
-      let walkTimeMin: number | undefined;
-
-      if (userCoords) {
-        distanceMeters = calculateHaversineDistance(
-          userCoords.latitude,
-          userCoords.longitude,
-          fac.latitude,
-          fac.longitude
-        );
-        walkTimeMin = calculateWalkTimeMinutes(distanceMeters);
-      }
-
-      return {
-        ...fac,
-        currentStatus: status,
-        lastReportedAt,
-        lastPhotoUrl,
-        distanceMeters,
-        walkTimeMin,
-        activeReportCount,
-      };
-    });
+    try {
+      const { facilities } = await apiRequest<{ facilities: FacilityWithStatus[] }>(
+        `/api/stations/${encodeURIComponent(stationId)}/facilities`,
+      );
+      return withDistances(facilities, userCoords ?? null);
+    } catch (err) {
+      if (isMissing(err)) return [];
+      throw err;
+    }
   },
 
-  // TODO(backend): Replace with supabase query by facility id
   async getFacilityById(
     facilityId: string,
-    userCoords?: { latitude: number; longitude: number } | null
+    userCoords?: Coordinates | null,
   ): Promise<FacilityWithStatus | null> {
-    await new Promise((r) => setTimeout(r, 150));
-    const fac = dynamicFacilities.find((f) => f.id === facilityId);
-    if (!fac) return null;
-
-    const facReports = MOCK_REPORTS.filter((r) => r.facilityId === fac.id);
-    const { status, lastReportedAt, lastPhotoUrl, activeReportCount } =
-      resolveFacilityStatus(facReports);
-
-    let distanceMeters: number | undefined;
-    let walkTimeMin: number | undefined;
-
-    if (userCoords) {
-      distanceMeters = calculateHaversineDistance(
-        userCoords.latitude,
-        userCoords.longitude,
-        fac.latitude,
-        fac.longitude
+    try {
+      const { facility } = await apiRequest<{ facility: FacilityWithStatus }>(
+        `/api/facilities/${encodeURIComponent(facilityId)}`,
       );
-      walkTimeMin = calculateWalkTimeMinutes(distanceMeters);
+      return withDistances([facility], userCoords ?? null)[0];
+    } catch (err) {
+      if (isMissing(err)) return null;
+      throw err;
     }
-
-    return {
-      ...fac,
-      currentStatus: status,
-      lastReportedAt,
-      lastPhotoUrl,
-      distanceMeters,
-      walkTimeMin,
-      activeReportCount,
-    };
   },
 
-  // TODO(backend): Replace with supabase.from('facilities').update(updates).eq('id', id)
-  async updateFacility(
-    facilityId: string,
-    updates: Partial<Facility>
-  ): Promise<Facility> {
-    await new Promise((r) => setTimeout(r, 250));
-    const index = dynamicFacilities.findIndex((f) => f.id === facilityId);
-    if (index === -1) throw new Error('Facility not found');
-    dynamicFacilities[index] = { ...dynamicFacilities[index], ...updates };
-    return dynamicFacilities[index];
+  /** Admin only (checked by the API and RLS). */
+  async updateFacility(facilityId: string, updates: Partial<Facility>): Promise<Facility> {
+    const { facility } = await apiRequest<{ facility: Facility }>(
+      `/api/admin/facilities/${encodeURIComponent(facilityId)}`,
+      { method: 'PATCH', body: pickFacilityUpdates(updates) },
+    );
+    return facility;
   },
 
-  // TODO(backend): Replace with supabase.from('stations').update(updates).eq('id', id)
-  async updateStation(
-    stationId: string,
-    updates: Partial<Station>
-  ): Promise<Station> {
-    await new Promise((r) => setTimeout(r, 250));
-    const index = dynamicStations.findIndex((s) => s.id === stationId);
-    if (index === -1) throw new Error('Station not found');
-    dynamicStations[index] = { ...dynamicStations[index], ...updates };
-    return dynamicStations[index];
+  /** Admin only (checked by the API and RLS). */
+  async updateStation(stationId: string, updates: Partial<Station>): Promise<Station> {
+    const { station } = await apiRequest<{ station: Station }>(
+      `/api/admin/stations/${encodeURIComponent(stationId)}`,
+      { method: 'PATCH', body: pickStationUpdates(updates) },
+    );
+    return station;
   },
 };
+
+// Only send editable fields; the API rejects anything else.
+function pickFacilityUpdates(u: Partial<Facility>) {
+  const { name, type, platform, locationDetail, level, latitude, longitude, layoutX, layoutY, isActive } = u;
+  return { name, type, platform, locationDetail, level, latitude, longitude, layoutX, layoutY, isActive };
+}
+
+function pickStationUpdates(u: Partial<Station>) {
+  const { name, lines, latitude, longitude, isPilot } = u;
+  return { name, lines, latitude, longitude, isPilot };
+}
