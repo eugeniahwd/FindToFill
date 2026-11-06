@@ -16,11 +16,12 @@ import {
   type ChatbotMode,
 } from '@/lib/chatbot/config';
 import type { ChatOutcome, ChatRequest, ChatResponse } from '@/lib/chatbot/contract';
-import { getIdentityKey } from '@/lib/chatbot/identity';
 import { FALLBACK_MESSAGES } from '@/lib/chatbot/prompts';
 import { InMemoryRateLimiter } from '@/lib/chatbot/rateLimit';
 import { getStubChatResponse } from '@/lib/chatbot/stub';
 import { ChatRequestSchema } from '@/lib/chatbot/validation';
+// Backend's rate-limit key: user id when logged in, else an HMAC of the IP (IP_HASH_SALT).
+import { chatRateLimitKey } from '@/lib/rate-limit';
 
 // Vercel Hobby allows up to 300 s with Fluid compute (docs checked 2026-11-01).
 // 15 s covers the 10 s hard timeout plus a margin.
@@ -39,8 +40,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ChatResponse>
       });
     }
 
+    // Guests only for now; the signed-in user id is passed once the orchestrator lands.
     const limit = await rateLimiter.check(
-      getIdentityKey(req.headers),
+      chatRateLimitKey(req.headers, null),
       'chat',
       RATE_LIMIT_CHAT,
       RATE_LIMIT_WINDOW_SEC,
