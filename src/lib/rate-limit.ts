@@ -17,6 +17,7 @@ export interface RateLimitRule {
 
 export const RATE_LIMITS = {
   report: { action: 'report', limit: APP_CONFIG.MAX_REPORTS_PER_HOUR, windowMs: APP_CONFIG.RATE_LIMIT_WINDOW_MS },
+  review: { action: 'review', limit: APP_CONFIG.MAX_REVIEWS_PER_HOUR, windowMs: APP_CONFIG.RATE_LIMIT_WINDOW_MS },
   chat: { action: 'chat', limit: APP_CONFIG.MAX_CHAT_PER_HOUR, windowMs: APP_CONFIG.RATE_LIMIT_WINDOW_MS },
 } as const satisfies Record<string, RateLimitRule>;
 

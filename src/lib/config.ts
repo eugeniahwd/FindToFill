@@ -18,8 +18,20 @@ export const APP_CONFIG = {
   REPORT_NOTE_MAX_CHARS: 140,
   RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,
 
+  // Reviews: one per user per facility (editable). Each save embeds the comment.
+  REVIEW_COMMENT_MAX_CHARS: 500,
+  STATION_REVIEWS_LIMIT: 50,
+  // Must match reviews.embedding vector(768) in supabase/migrations.
+  EMBEDDING_DIMENSIONS: 768,
+  EMBEDDING_TIMEOUT_MS: 3000,
+
+  // Chatbot (Groq). SPEC: answer within 3 s in 90% of runs, hard timeout 10 s, then fallback.
+  CHAT_TIMEOUT_MS: 10_000,
+
   // Rate Limits
   MAX_REPORTS_PER_HOUR: 5,
+  // Not in SPEC: protects the free Gemini embedding quota from repeated edits.
+  MAX_REVIEWS_PER_HOUR: 10,
   MAX_CHAT_PER_HOUR: 20,
   
   // Contact

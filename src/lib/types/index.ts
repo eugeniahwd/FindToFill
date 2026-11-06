@@ -63,11 +63,13 @@ export interface Report {
 export interface Review {
   id: string;
   facilityId: string;
+  facilityName?: string;
   userId: string;
   userName?: string;
   rating: number; // 1 to 5
   comment: string;
   createdAt: string;
+  updatedAt?: string;
   removedAt?: string | null;
   removedBy?: string | null;
 }

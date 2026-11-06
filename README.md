@@ -11,6 +11,9 @@
 - **Styling**: Tailwind CSS (Mobile-first responsive design, Inter font)
 - **Icons**: Lucide React
 - **Maps**: Leaflet & React-Leaflet with OpenStreetMap tiles
+- **Backend**: Next.js Route Handlers + Supabase (PostgreSQL + pgvector, Auth, Storage, RLS)
+- **AI chatbot**: Groq API (`groq-sdk`, tool calling)
+- **Review embeddings**: Gemini API (`@google/genai`, `gemini-embedding-001`, 768-d). Groq has no embedding models
 - **Testing**: Jest & React Testing Library
 
 ---
@@ -41,7 +44,7 @@ Copy `.env.example` to `.env.local`:
 cp .env.example .env.local
 ```
 
-Fill in the values from your Supabase project and Google AI Studio (see **Backend & Database** below). Without them the app still runs, but login and API routes report that the server is not configured.
+Fill in the values from your Supabase project, the Groq console, and Google AI Studio (see **Backend & Database** below). Without them the app still runs, but login and API routes report that the server is not configured.
 
 ### Development Server
 
@@ -93,9 +96,16 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 | `GET /api/facilities/:id` | One active facility with current status |
 | `POST /api/reports` | Live report (multipart: `facilityId`, `status`, `note` ≤ 140, `photo` JPEG/PNG/WebP ≤ 5 MB). Login required, 5 per user per hour, awards the first stamp. Returns `201 { report, stampAwarded }` |
 | `GET /api/me/reports` | The signed-in user's 10 latest reports (Profile page) |
+| `GET /api/stations/:id/reviews` | Public: non-removed reviews of the station's facilities, newest first (max 50). No author names (profiles are private) |
+| `POST /api/reviews` | JSON `{ facilityId, rating 1-5, comment ≤ 500 }`. Login required, 10 per user per hour. One review per user per facility: posting again edits it. The comment is embedded with Gemini (768-d); if that fails the review is saved with a null embedding. Returns `201` (new, may award the first stamp) or `200` (edit) with `{ review, created, stampAwarded }` |
+| `GET /api/me/favorites` | The signed-in user's favorite station ids |
+| `PUT`, `DELETE /api/me/favorites/:stationId` | Favorite or unfavorite a station (both safe to repeat) |
+| `GET /api/me/stamps` | The signed-in user's stamps with each facility's station (Stamp Map) |
 | `PATCH /api/admin/facilities/:id`, `PATCH /api/admin/stations/:id` | Admin edits (checked in the API and by RLS) |
 | `src/lib/rate-limit.ts` | Sliding-window limits stored in `rate_limit_events` (reports now, chat later) |
-| `src/lib/data/` | Server data access (`stations.ts`, signed photo URLs in `photos.ts`), reusable by the chatbot tools |
+| `src/lib/data/` | Server data access (`stations.ts`, `reviews.ts`, signed photo URLs in `photos.ts`), reusable by the chatbot tools |
+| `src/lib/gemini/embeddings.ts` | `embedText(text, 'document' \| 'query')`: 768-d unit vector or `null` (never throws). Also for the `search_reviews` tool |
+| `src/lib/groq/client.ts` | `getGroqClient()` (server-only, no retries, 10 s timeout; `null` without a key) and `getChatModel()` for the chatbot |
 
 **Manual setup (once per team):**
 
@@ -110,6 +120,10 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
    where id = (select id from auth.users where email = 'YOUR_EMAIL');
    ```
 7. Open `/api/health` and expect `{ "ok": true, "stations": 3 }`.
+8. Create a free API key in [Google AI Studio](https://aistudio.google.com/apikey) in the **Default Gemini Project** (Free tier, no billing) and put it in `GEMINI_API_KEY`. It is used only for review embeddings. Without it, reviews still save but have no embedding (the chatbot then falls back to the latest reviews).
+9. Create a free API key in the [Groq console](https://console.groq.com/keys) (no payment card) and put it in `GROQ_API_KEY`. It runs the chatbot. Without it, the chatbot answers with the "assistant unavailable" fallback.
+
+Restart `npm run dev` after editing `.env.local`. Each teammate should create their own free keys instead of sharing one.
 
 When a migration is added later, run only the new file. Keep `src/lib/supabase/database.types.ts` in sync with the schema.
 
