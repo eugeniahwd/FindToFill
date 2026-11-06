@@ -1,9 +1,10 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, Award, X } from 'lucide-react';
 
-export type ToastType = 'success' | 'error' | 'info';
+/** 'stamp': a success that also earned a facility stamp (medal icon, stamp colors). */
+export type ToastType = 'success' | 'error' | 'info' | 'stamp';
 
 interface ToastItem {
   id: string;
@@ -47,6 +48,8 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               ? 'bg-[#E8F5E9] border-[#2E7D32]/30 text-[#2E7D32]'
               : toast.type === 'error'
               ? 'bg-[#FDECEA] border-[#BA1A1A]/30 text-[#BA1A1A]'
+              : toast.type === 'stamp'
+              ? 'bg-[#FFF8D6] border-[#FFD233] text-[#9A6700]'
               : 'bg-[#FFF8D6] border-[#FFD233]/40 text-[#011638]';
 
           const Icon =
@@ -54,6 +57,8 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
               ? CheckCircle2
               : toast.type === 'error'
               ? AlertCircle
+              : toast.type === 'stamp'
+              ? Award
               : Info;
 
           return (

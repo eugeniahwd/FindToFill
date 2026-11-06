@@ -6,6 +6,7 @@ import {
   Heart,
   Award,
   PenLine,
+  Pencil,
   Lock,
   ChevronRight,
 } from 'lucide-react';
@@ -16,9 +17,10 @@ import { communityService } from '@/lib/services/communityService';
 import { stationService } from '@/lib/services/stationService';
 import { Review, Station, FacilityWithStatus, Stamp } from '@/lib/types';
 import { useLocation } from '@/context/LocationContext';
-import { BottomSheet } from '@/components/common/BottomSheet';
+import { ReviewSheet } from '@/components/review/ReviewSheet';
 import { EmptyState } from '@/components/common/EmptyState';
 import { formatTimeAgo } from '@/lib/utils/status';
+import type { SubmitReviewResult } from '@/lib/services/reviewService';
 
 export default function CommunityPage() {
   const { user, requireAuth } = useAuth();
@@ -31,10 +33,10 @@ export default function CommunityPage() {
 
   // Reviews state
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [stationFacilities, setStationFacilities] = useState<FacilityWithStatus[]>([]);
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [ratingInput, setRatingInput] = useState(5);
-  const [commentInput, setCommentInput] = useState('');
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  // Set by the Edit button on the user's own review; undefined for "Tulis Ulasan".
+  const [editFacilityId, setEditFacilityId] = useState<string | undefined>();
 
   // Favorites state
   const [favoriteStationIds, setFavoriteStationIds] = useState<string[]>([]);
@@ -46,15 +48,35 @@ export default function CommunityPage() {
   const [userStamps, setUserStamps] = useState<Stamp[]>([]);
 
   useEffect(() => {
+    if (!selectedStationId) return;
+    // Ignore a slow response for a station chip the user already left.
+    let isCurrent = true;
+    async function loadReviews() {
+      try {
+        const [revs, facs] = await Promise.all([
+          reviewService.getStationReviews(selectedStationId),
+          stationService.getStationFacilities(selectedStationId),
+        ]);
+        if (!isCurrent) return;
+        setReviews(revs);
+        setStationFacilities(facs);
+      } catch (err) {
+        console.error('Error loading station reviews', err);
+      }
+    }
+    loadReviews();
+    return () => {
+      isCurrent = false;
+    };
+  }, [selectedStationId]);
+
+  useEffect(() => {
     async function loadData() {
       try {
-        const revs = await reviewService.getStationReviews(selectedStationId);
-        setReviews(revs);
-
         if (user) {
           const [favIds, stamps] = await Promise.all([
-            communityService.getFavorites(user.id),
-            communityService.getUserStamps(user.id),
+            communityService.getFavorites(),
+            communityService.getUserStamps(),
           ]);
           setFavoriteStationIds(favIds);
           setUserStamps(stamps);
@@ -76,16 +98,19 @@ export default function CommunityPage() {
       }
     }
     loadData();
-  }, [selectedStationId, user]);
+  }, [user]);
 
   const handleToggleFavorite = async (stationId: string) => {
     if (!requireAuth('/community')) return;
     try {
-      const nowFav = await communityService.toggleFavorite(user!.id, stationId);
+      const nowFav = await communityService.setFavorite(stationId, !favoriteStationIds.includes(stationId));
       const updated = nowFav
         ? [...favoriteStationIds, stationId]
         : favoriteStationIds.filter((id) => id !== stationId);
       setFavoriteStationIds(updated);
+      if (!nowFav) {
+        setFavoriteStationsWithFacs((prev) => prev.filter((f) => f.station.id !== stationId));
+      }
 
       showToast(
         nowFav ? 'Ditambahkan ke stasiun favorit.' : 'Dihapus dari favorit.',
@@ -96,37 +121,16 @@ export default function CommunityPage() {
     }
   };
 
-  const handleSubmitReview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!requireAuth('/community')) return;
-    if (!commentInput.trim()) {
-      showToast('Harap tuliskan ulasan Anda.', 'error');
-      return;
+  const handleReviewSaved = ({ review, stampAwarded }: SubmitReviewResult) => {
+    // A new review goes on top; an edited one replaces its old version.
+    setReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)]);
+    if (stampAwarded && user) {
+      setUserStamps((prev) => [
+        ...prev,
+        { userId: user.id, facilityId: review.facilityId, stationId: selectedStationId, stampedAt: new Date().toISOString() },
+      ]);
     }
-
-    const facs = await stationService.getStationFacilities(selectedStationId);
-    const targetFac = facs[0];
-    if (!targetFac) return;
-
-    setIsSubmittingReview(true);
-    try {
-      const newRev = await reviewService.addReview({
-        facilityId: targetFac.id,
-        userId: user!.id,
-        userName: user!.displayName,
-        rating: ratingInput,
-        comment: commentInput,
-      });
-
-      setReviews([newRev, ...reviews]);
-      setShowReviewModal(false);
-      setCommentInput('');
-      showToast('Ulasan berhasil ditambahkan! Stamp didapatkan 🎉', 'success');
-    } catch {
-      showToast('Gagal mengirim ulasan.', 'error');
-    } finally {
-      setIsSubmittingReview(false);
-    }
+    setShowReviewModal(false);
   };
 
   // Stamp calculation: stations where user has at least one stamp
@@ -223,7 +227,7 @@ export default function CommunityPage() {
                         reviews.reduce((acc, r) => acc + r.rating, 0) /
                         reviews.length
                       ).toFixed(1)
-                    : '5.0'}
+                    : '-'}
                 </span>
                 <span className="text-xs text-slate-400">/ 5.0</span>
               </div>
@@ -235,6 +239,7 @@ export default function CommunityPage() {
             <button
               onClick={() => {
                 if (!requireAuth('/community')) return;
+                setEditFacilityId(undefined);
                 setShowReviewModal(true);
               }}
               className="min-touch-target px-3.5 py-2 rounded-xl bg-[#00628C] text-white text-xs font-bold shadow-xs hover:bg-[#004e70] flex items-center gap-1.5"
@@ -246,6 +251,13 @@ export default function CommunityPage() {
 
           {/* Review List */}
           <div className="flex flex-col gap-2.5">
+            {reviews.length === 0 && (
+              <EmptyState
+                icon={Star}
+                title="Belum Ada Ulasan"
+                message="Jadilah yang pertama mengulas fasilitas di stasiun ini."
+              />
+            )}
             {reviews.map((rev) => (
               <div
                 key={rev.id}
@@ -253,7 +265,7 @@ export default function CommunityPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-navy">
-                    {rev.userName || 'Penumpang KRL'}
+                    {rev.userId === user?.id ? 'Ulasan Anda' : 'Penumpang KRL'}
                   </span>
                   <div className="flex items-center text-amber-500">
                     {Array.from({ length: 5 }).map((_, i) => (
@@ -271,10 +283,24 @@ export default function CommunityPage() {
                   &ldquo;{rev.comment}&rdquo;
                 </p>
 
-                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-50">
-                  <span>Dispenser Air Minum</span>
-                  <span>{formatTimeAgo(rev.createdAt)}</span>
+                <div className="text-[11px] text-slate-400 flex items-center justify-between gap-2 pt-1 border-t border-slate-50">
+                  <span className="truncate">{rev.facilityName ?? 'Fasilitas stasiun'}</span>
+                  <span className="shrink-0">{formatTimeAgo(rev.updatedAt ?? rev.createdAt)}</span>
                 </div>
+
+                {rev.userId === user?.id && (
+                  <button
+                    onClick={() => {
+                      setEditFacilityId(rev.facilityId);
+                      setShowReviewModal(true);
+                    }}
+                    className="min-touch-target self-start px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1.5"
+                    aria-label={`Edit ulasan untuk ${rev.facilityName ?? 'fasilitas ini'}`}
+                  >
+                    <Pencil size={13} aria-hidden="true" />
+                    <span>Edit Ulasan</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -432,7 +458,7 @@ export default function CommunityPage() {
                       <span className="text-xs text-slate-500 block mt-0.5">
                         {isStamped
                           ? 'Sudah pernah berkontribusi'
-                          : 'Belum pernah dilaporkan'}
+                          : 'Belum ada laporan atau ulasan dari Anda'}
                       </span>
                     </div>
                   </div>
@@ -451,63 +477,17 @@ export default function CommunityPage() {
         </div>
       )}
 
-      {/* Review Modal */}
-      <BottomSheet
-        isOpen={showReviewModal}
-        onClose={() => setShowReviewModal(false)}
-        title="Tulis Ulasan Air Stasiun"
-        description="Bantu tingkatkan kualitas layanan dengan membagikan ulasan fasilitas air minum."
-      >
-        <form onSubmit={handleSubmitReview} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Beri Bintang
-            </label>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  type="button"
-                  key={star}
-                  onClick={() => setRatingInput(star)}
-                  className="min-touch-target p-1 text-amber-400"
-                >
-                  <Star
-                    size={28}
-                    fill={star <= ratingInput ? 'currentColor' : 'none'}
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="comm-review-text"
-              className="block text-xs font-semibold text-slate-700 mb-1"
-            >
-              Ulasan Anda (maks 500 karakter)
-            </label>
-            <textarea
-              id="comm-review-text"
-              rows={4}
-              maxLength={500}
-              required
-              value={commentInput}
-              onChange={(e) => setCommentInput(e.target.value)}
-              placeholder="Ceritakan kebersihan atau kesegaran air minum..."
-              className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#00628C]"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmittingReview}
-            className="min-touch-target py-3 rounded-xl bg-[#011638] text-white font-bold text-sm hover:bg-[#002255] transition-colors"
-          >
-            {isSubmittingReview ? 'Mengirim...' : 'Kirim Ulasan'}
-          </button>
-        </form>
-      </BottomSheet>
+      {showReviewModal && (
+        <ReviewSheet
+          title="Tulis Ulasan Fasilitas"
+          description="Bantu penumpang lain dengan membagikan pengalaman Anda di fasilitas stasiun ini."
+          facilities={stationFacilities}
+          myReviews={reviews.filter((r) => r.userId === user?.id)}
+          initialFacilityId={editFacilityId}
+          onClose={() => setShowReviewModal(false)}
+          onSaved={handleReviewSaved}
+        />
+      )}
     </div>
   );
 }

@@ -83,12 +83,11 @@ export default function ReportPage({ params }: PageProps) {
         note,
       });
 
-      showToast(
-        stampAwarded
-          ? 'Laporan berhasil dikirim! Stamp fasilitas diperoleh 🎉'
-          : 'Laporan berhasil dikirim! Terima kasih.',
-        'success'
-      );
+      if (stampAwarded) {
+        showToast('Laporan berhasil dikirim! Stamp fasilitas diperoleh.', 'stamp');
+      } else {
+        showToast('Laporan berhasil dikirim! Terima kasih.', 'success');
+      }
       router.push(`/stations/${facility?.stationId || ''}`);
     } catch (err) {
       showToast(reportErrorMessage(err), 'error');
