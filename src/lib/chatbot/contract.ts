@@ -18,9 +18,8 @@ export type FacilityStatus = 'available' | 'empty' | 'broken' | 'under_maintenan
 
 export interface ChatRequest {
   quickMessageId: QuickMessageId;
-  lat?: number; // validated range, never stored
-  lng?: number;
-  stationId?: string; // manual station choice (GPS denied or wrong)
+  // The station the app shows (detected in the browser or picked). GPS never reaches the server.
+  stationId?: string;
   sessionId?: string; // anonymous random id from the client (optional)
 }
 
@@ -39,6 +38,8 @@ export interface ChatCard {
   minutesAgo: number | null;
 }
 
+// Station detection happens in the browser, so the server sends source "manual" and
+// needsConfirmation false. The fields stay for contract stability.
 export interface DetectedStation {
   id: string;
   name: string;

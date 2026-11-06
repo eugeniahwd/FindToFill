@@ -5,10 +5,8 @@
  * tests/chatbot/config.test.ts fails if the values both files define drift apart.
  */
 
-// ─── Location and walking ─────────────────────────────────────────────────────
-export const STATION_DETECTION_RADIUS_M = 800;
-// Farther than this, but inside the detection radius: needsConfirmation = true.
-export const STATION_CONFIRMATION_RADIUS_M = 300;
+// ─── Walking ──────────────────────────────────────────────────────────────────
+// GPS stays in the browser, so station detection radii live in the shared config only.
 export const WALKING_SPEED_MPS = 1.2;
 export const FILL_BUFFER_MIN = 1;
 

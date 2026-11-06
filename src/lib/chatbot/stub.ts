@@ -4,9 +4,9 @@
  * Canned ChatResponse objects for CHATBOT_MODE=stub, so the Frontend can integrate before the
  * orchestrator exists. Data: the Manggarai demo fixture from docs/AI_TRACK.md §10, not field data.
  *
- * - Any GPS position is treated as Stasiun Manggarai.
- * - stationId "station-manggarai" is a manual pick: same answers, distances approximate.
- * - Any other stationId gets the no-data fallback; no location at all gets the station-picker one.
+ * - stationId "station-manggarai" gets the canned answers. GPS stays in the browser, so every
+ *   distance is measured from the station center (approximate).
+ * - Any other stationId gets the no-data fallback; no stationId gets the station-picker one.
  */
 
 import type {
@@ -112,28 +112,23 @@ const NEXT_TRAIN = { line: 'Bogor', direction: 'Jakarta Kota', minutesUntil: 7 }
 const REVIEWS = { count: 12, averageRating: '4,2', commonTheme: 'airnya dingin dan bersih' };
 
 export function getStubChatResponse(request: ChatRequest, now: Date = new Date()): ChatResponse {
-  const hasGps = request.lat !== undefined && request.lng !== undefined;
-  if (request.stationId === undefined && !hasGps) {
+  if (request.stationId === undefined) {
     return stubFallback(FALLBACK_MESSAGES.noLocation, now);
   }
-  if (request.stationId !== undefined && request.stationId !== STUB_STATION.id) {
+  if (request.stationId !== STUB_STATION.id) {
     return stubFallback(FALLBACK_MESSAGES.noData, now);
   }
 
-  // A stationId wins over GPS: it is a manual pick, so distances are from the station center.
-  const manual = request.stationId !== undefined;
   const detectedStation: DetectedStation = {
     id: STUB_STATION.id,
     name: STUB_STATION.name,
-    source: manual ? 'manual' : 'gps',
+    source: 'manual',
     needsConfirmation: false,
   };
   const station = `Stasiun ${STUB_STATION.name}`;
-  const intro = manual ? `Kamu memilih ${station}.` : `Kamu terdeteksi di ${station}.`;
-  const distance = (meters: number) =>
-    manual ? `perkiraan ${meters} m dari titik tengah stasiun` : `sekitar ${meters} m dari kamu`;
+  const distance = (meters: number) => `perkiraan ${meters} m dari titik tengah stasiun`;
   const toCards = (...facilities: StubFacility[]) =>
-    facilities.map((facility) => toCard(facility, manual, now));
+    facilities.map((facility) => toCard(facility, now));
   const answered = (message: string, cards: ChatCard[], scheduleReminder = false): ChatResponse => ({
     outcome: 'answered',
     message,
@@ -149,8 +144,8 @@ export function getStubChatResponse(request: ChatRequest, now: Date = new Date()
       const water = WATER_PLATFORM_3;
       return answered(
         [
-          intro,
-          `Dispenser air terdekat yang tersedia ada di ${place(water)}, ${distance(water.distanceM)}.`,
+          `Di ${station}, dispenser air terdekat yang tersedia ada di ${place(water)},`,
+          `${distance(water.distanceM)}.`,
           `Laporan terakhir ${water.minutesAgo} menit lalu.`,
         ].join(' '),
         toCards(water),
@@ -160,8 +155,8 @@ export function getStubChatResponse(request: ChatRequest, now: Date = new Date()
       const charging = CHARGING_LOUNGE;
       return answered(
         [
-          intro,
-          `Charging station terdekat yang tersedia ada di ${place(charging)}, ${distance(charging.distanceM)}.`,
+          `Di ${station}, charging station terdekat yang tersedia ada di ${place(charging)},`,
+          `${distance(charging.distanceM)}.`,
           `Laporan terakhir ${charging.minutesAgo} menit lalu.`,
         ].join(' '),
         toCards(charging),
@@ -183,9 +178,7 @@ export function getStubChatResponse(request: ChatRequest, now: Date = new Date()
       const water = WATER_PLATFORM_3;
       const [card] = toCards(water);
       const neededMin = 2 * card.walkTimeMin + FILL_BUFFER_MIN;
-      const walk = manual
-        ? `perkiraan ${card.walkTimeMin} menit jalan dari titik tengah stasiun`
-        : `sekitar ${card.walkTimeMin} menit jalan`;
+      const walk = `perkiraan ${card.walkTimeMin} menit jalan dari titik tengah stasiun`;
       const verdict =
         neededMin <= NEXT_TRAIN.minutesUntil ? 'jadi masih sempat' : 'jadi waktunya tidak cukup';
       return answered(
@@ -216,7 +209,7 @@ function place(facility: StubFacility): string {
   return facility.platform ? `${facility.name}, Platform ${facility.platform}` : facility.name;
 }
 
-function toCard(facility: StubFacility, distanceIsApproximate: boolean, now: Date): ChatCard {
+function toCard(facility: StubFacility, now: Date): ChatCard {
   const { minutesAgo } = facility;
   return {
     facilityId: facility.facilityId,
@@ -226,7 +219,8 @@ function toCard(facility: StubFacility, distanceIsApproximate: boolean, now: Dat
     locationDetail: facility.locationDetail,
     level: facility.level,
     distanceM: facility.distanceM,
-    distanceIsApproximate,
+    // Measured from the station center: the server never has the user's position.
+    distanceIsApproximate: true,
     // Same rule as get_nearest_facility (§7): max(1, ceil(distance / walking meters per minute)).
     walkTimeMin: Math.max(1, Math.ceil(facility.distanceM / (WALKING_SPEED_MPS * 60))),
     status: facility.status,

@@ -11,7 +11,7 @@ export const FALLBACK_MESSAGES = {
     'Aku belum menemukan data fasilitas untuk pertanyaan ini. Coba pilih stasiun lain atau lihat peta.',
   outsidePilotArea:
     'Kamu sepertinya tidak berada di stasiun pilot FindToFill. Pilih stasiun secara manual untuk melanjutkan.',
-  // Not listed in §8: the request had neither GPS nor a stationId (§11, "Neither GPS nor stationId").
+  // The request had no stationId: the browser could not detect a station and none was picked.
   noLocation: 'Lokasimu belum terdeteksi. Pilih stasiun secara manual untuk melanjutkan.',
   rejected: 'Pertanyaan tidak dikenali.',
   rateLimited: 'Terlalu banyak permintaan. Coba lagi nanti.',
