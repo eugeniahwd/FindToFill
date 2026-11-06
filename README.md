@@ -139,3 +139,47 @@ When a migration is added later, run only the new file. Keep `src/lib/supabase/d
 npm run build
 npm run start
 ```
+
+---
+
+## Chatbot API (Frontend integration)
+
+`POST /api/chat` with the header `Content-Type: application/json`. The types live in [`src/lib/chatbot/contract.ts`](src/lib/chatbot/contract.ts); import them instead of redefining them. Every status code returns a `ChatResponse` body.
+
+```ts
+import type { ChatRequest, ChatResponse } from '@/lib/chatbot/contract';
+
+// selectedStation comes from LocationContext: detected in the browser or picked by the user.
+const body: ChatRequest = { quickMessageId, stationId: selectedStation.id, sessionId };
+
+const res = await fetch('/api/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+const data = (await res.json()) as ChatResponse;
+```
+
+Request rules (anything else gets `400 rejected`):
+
+- `quickMessageId`: one of `QUICK_MESSAGE_IDS`. Take the button texts from `QUICK_MESSAGES` in [`src/lib/chatbot/quickMessages.ts`](src/lib/chatbot/quickMessages.ts); the server never reads client text.
+- `stationId`: the station the app shows, detected in the browser from GPS or picked by the user. GPS coordinates never go to the server: a request with `lat` or `lng` gets a 400. Without `stationId`, the reply asks the user to pick a station.
+- `sessionId` (optional): `crypto.randomUUID()`, kept for the browser session.
+- No other fields and no `null` values; omit a field instead.
+
+| HTTP | `outcome` | Show |
+|---|---|---|
+| 200 | `answered` | `message`, then up to 3 `cards`. If `scheduleReminder`, show "Perhatikan papan informasi stasiun untuk jadwal kedatangan KRL terkini." |
+| 200 | `fallback_no_data` | `message`. If `needsStationSelection`, open the station picker. |
+| 200 | `fallback_ai_unavailable` | `message` and a link to the map |
+| 400 | `rejected` | `message`. The request broke a rule above. |
+| 429 | `rejected` | `message`. Retry after `retryAfterSec` seconds (also in the `Retry-After` header). |
+| 500 | `fallback_ai_unavailable` | `message` and a link to the map |
+
+Each card has `name`, `platform`, `locationDetail`, `distanceM`, `walkTimeMin`, `status` (`unknown` means "No recent report"), and `lastReportedAt` / `minutesAgo`. The server never has the user's position, so `distanceM` is measured from the station center and `distanceIsApproximate` is always true: show it as approximate. `detectedStation.name` is the station the answer is about.
+
+**Pilot stations:** 3, as in the seed data: Manggarai, Sudirman, and Tebet. `docs/SPEC.md` §3 still names 5; SPEC lets the team change the list, and the seed data is the source.
+
+**Stub mode** (`CHATBOT_MODE` unset or `stub`) returns canned demo answers and needs no keys. It only knows `stationId: "station-manggarai"`; any other `stationId`, including real database ids, gets the no-data fallback, and a request without `stationId` gets the station-picker fallback. `fake` and `live` return `fallback_ai_unavailable` until they are built. The limit is 20 requests per hour per client, kept in memory, so restarting `npm run dev` resets it.
+
+**Rate limit caveat:** the route still counts in memory per server instance. On Vercel, each instance keeps its own count and starts from zero after a cold start, so the limit is best-effort until the route switches to Backend's database-backed `consumeRateLimit()` with the orchestrator. The key comes from Backend's `chatRateLimitKey()` (an HMAC of the IP with `IP_HASH_SALT`), so production must set `IP_HASH_SALT`; without it every chat request returns 500.
