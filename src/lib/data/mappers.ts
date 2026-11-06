@@ -1,5 +1,5 @@
 import type { TableRow, ViewRow } from '@/lib/supabase/database.types';
-import type { Facility, FacilityWithStatus, Station, StationLayout } from '@/lib/types';
+import type { Facility, FacilityWithStatus, Report, Station, StationLayout } from '@/lib/types';
 
 // Database rows (snake_case, null) -> app types (camelCase, undefined). No I/O here.
 
@@ -40,6 +40,21 @@ export function toFacility(row: TableRow<'facilities'>): Facility {
     layoutY: row.layout_y === null ? undefined : Number(row.layout_y),
     isActive: row.is_active,
     isDemoData: row.is_demo_data,
+  };
+}
+
+/** photoUrl is a short-lived signed URL (private bucket), or '' when it could not be signed. */
+export function toReport(row: TableRow<'reports'>, photoUrl: string | null): Report {
+  return {
+    id: row.id,
+    facilityId: row.facility_id,
+    userId: row.user_id,
+    status: row.status,
+    photoUrl: photoUrl ?? '',
+    note: row.note ?? undefined,
+    createdAt: row.created_at,
+    removedAt: row.removed_at,
+    removedBy: row.removed_by,
   };
 }
 

@@ -12,6 +12,11 @@ export const APP_CONFIG = {
   
   // Report photos are in a private bucket; links are short-lived signed URLs.
   SIGNED_PHOTO_URL_TTL_S: 60 * 60,
+  // Server-side photo limit (the browser compresses to ~1280 px JPEG first).
+  // Note: Vercel caps request bodies at ~4.5 MB, below this limit.
+  MAX_PHOTO_BYTES: 5 * 1024 * 1024,
+  REPORT_NOTE_MAX_CHARS: 140,
+  RATE_LIMIT_WINDOW_MS: 60 * 60 * 1000,
 
   // Rate Limits
   MAX_REPORTS_PER_HOUR: 5,

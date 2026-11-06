@@ -91,6 +91,10 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 | `GET /api/stations/:id` | One station and its layouts |
 | `GET /api/stations/:id/facilities` | Active facilities with current status (7-day window). No distances: the browser adds them with `rankFacilities()` from `src/lib/utils/locator.ts`, so GPS coordinates never reach the server |
 | `GET /api/facilities/:id` | One active facility with current status |
+| `POST /api/reports` | Live report (multipart: `facilityId`, `status`, `note` ≤ 140, `photo` JPEG/PNG/WebP ≤ 5 MB). Login required, 5 per user per hour, awards the first stamp. Returns `201 { report, stampAwarded }` |
+| `GET /api/me/reports` | The signed-in user's 10 latest reports (Profile page) |
+| `PATCH /api/admin/facilities/:id`, `PATCH /api/admin/stations/:id` | Admin edits (checked in the API and by RLS) |
+| `src/lib/rate-limit.ts` | Sliding-window limits stored in `rate_limit_events` (reports now, chat later) |
 | `src/lib/data/` | Server data access (`stations.ts`, signed photo URLs in `photos.ts`), reusable by the chatbot tools |
 
 **Manual setup (once per team):**
