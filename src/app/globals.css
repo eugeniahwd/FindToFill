@@ -28,6 +28,8 @@
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
+  /* Bottom navigation height; floating UI (chatbot button, map controls) sits above it. */
+  --bottom-nav-height: calc(4rem + env(safe-area-inset-bottom, 0px));
 }
 
 html, body {
@@ -56,4 +58,19 @@ input, select, textarea {
   width: 100%;
   height: 100%;
   z-index: 10;
+}
+
+/* Full-screen maps run under the bottom nav: keep zoom and the OSM attribution visible above it. */
+.map-under-nav .leaflet-bottom {
+  bottom: var(--bottom-nav-height);
+}
+
+/* Facility hover tooltips: card look instead of Leaflet's default box. */
+.leaflet-tooltip.facility-tooltip {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(1, 22, 56, 0.18);
+  color: #011638;
+  font-family: inherit;
 }

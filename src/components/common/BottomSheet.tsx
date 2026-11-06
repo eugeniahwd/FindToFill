@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface BottomSheetProps {
@@ -31,7 +32,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  const sheet = (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
       role="dialog"
@@ -75,10 +76,14 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-5 overflow-y-auto overscroll-contain">
+        <div className="p-5 overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           {children}
         </div>
       </div>
     </div>
   );
+
+  // Portal to <body> so the sheet always covers the bottom nav and floating buttons, even when
+  // the opener sits inside its own stacking context (e.g. the fixed full-screen home map).
+  return typeof document === 'undefined' ? sheet : createPortal(sheet, document.body);
 };

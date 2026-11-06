@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { BottomNav } from './BottomNav';
+import { ChatbotFab } from './ChatbotFab';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,7 +16,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         {/* Content Area */}
         <main className="flex-1 flex flex-col w-full min-w-0">{children}</main>
 
-        {/* Global Bottom Navigation */}
+        {/* Global floating chatbot button and bottom navigation */}
+        <ChatbotFab />
         <BottomNav />
       </div>
     </div>

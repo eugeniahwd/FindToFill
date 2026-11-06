@@ -20,13 +20,26 @@ import { BottomSheet } from '@/components/common/BottomSheet';
 import { EmptyState } from '@/components/common/EmptyState';
 import { formatTimeAgo } from '@/lib/utils/status';
 
+const COMMUNITY_TABS = ['reviews', 'favorites', 'stamps'] as const;
+type CommunityTab = (typeof COMMUNITY_TABS)[number];
+
+function isCommunityTab(value: string | null): value is CommunityTab {
+  return COMMUNITY_TABS.some((tab) => tab === value);
+}
+
 export default function CommunityPage() {
   const { user, requireAuth } = useAuth();
   const { showToast } = useToast();
   // Pilot stations from the database (LocationProvider renders only after they load).
   const { stations } = useLocation();
 
-  const [activeTab, setActiveTab] = useState<'reviews' | 'favorites' | 'stamps'>('reviews');
+  const [activeTab, setActiveTab] = useState<CommunityTab>('reviews');
+
+  // Deep link from the bottom nav (/community?tab=stamps). Read after mount to keep SSR markup stable.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (isCommunityTab(tab)) setActiveTab(tab);
+  }, []);
   const [selectedStationId, setSelectedStationId] = useState<string>(stations[0]?.id ?? '');
 
   // Reviews state

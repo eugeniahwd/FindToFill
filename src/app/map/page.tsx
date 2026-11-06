@@ -88,6 +88,7 @@ export default function MapPage() {
             setIsSheetExpanded(true);
           }}
           onSelectStation={(st) => selectStation(st)}
+          showKrlLines
           className="w-full h-full"
         />
       </div>
