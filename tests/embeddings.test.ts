@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { embedText, normalize, toPgVector } from '@/lib/gemini/embeddings';
+import { embedQueryCached, embedText, normalize, toPgVector } from '@/lib/gemini/embeddings';
 
 const mockEmbedContent = jest.fn();
 jest.mock('@google/genai', () => ({
@@ -62,5 +62,24 @@ describe('embedText', () => {
   it('returns null for a vector with the wrong dimension', async () => {
     mockEmbedContent.mockResolvedValue({ embeddings: [{ values: [1, 2, 3] }] });
     expect(await embedText('Airnya segar', 'document')).toBeNull();
+  });
+});
+
+describe('embedQueryCached (fixed chatbot queries)', () => {
+  it('embeds a query once with the query task type, then serves it from memory', async () => {
+    mockEmbedContent.mockResolvedValue({ embeddings: [{ values: vector768() }] });
+    const first = await embedQueryCached('kualitas air minum');
+    const second = await embedQueryCached('kualitas air minum');
+
+    expect(second).toBe(first);
+    expect(mockEmbedContent).toHaveBeenCalledTimes(1);
+    expect(mockEmbedContent.mock.calls[0][0].config).toMatchObject({ taskType: 'RETRIEVAL_QUERY' });
+  });
+
+  it('does not cache a failure, so the next request retries', async () => {
+    mockEmbedContent.mockRejectedValueOnce(new Error('429')).mockResolvedValueOnce({ embeddings: [{ values: vector768() }] });
+    expect(await embedQueryCached('kebersihan dispenser')).toBeNull();
+    expect(await embedQueryCached('kebersihan dispenser')).toHaveLength(768);
+    expect(mockEmbedContent).toHaveBeenCalledTimes(2);
   });
 });

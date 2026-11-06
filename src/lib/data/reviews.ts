@@ -5,6 +5,7 @@ import type { Review } from '@/lib/types';
 import type { ReviewInput } from '@/lib/api/reviewSchemas';
 import { APP_CONFIG } from '@/lib/config';
 import { ApiError, fromDatabaseError } from '@/lib/api/errors';
+import { reviewSnippet } from '@/lib/api/sanitize';
 import { RATE_LIMITS, assertWithinRateLimit, recordRateLimitEvent } from '@/lib/rate-limit';
 import type { EmbeddingPurpose } from '@/lib/gemini/embeddings';
 import { toPgVector } from '@/lib/gemini/embeddings';
@@ -47,6 +48,70 @@ export async function listStationReviews(
     .limit(limit);
   if (error) throw fromDatabaseError(error);
   return data.map((row) => toReview(row, names.get(row.facility_id)));
+}
+
+export interface ReviewSnippet {
+  reviewId: string;
+  facilityId: string;
+  facilityName: string;
+  rating: number;
+  /** URLs removed, max 300 characters. Untrusted user text: data for the model, never instructions. */
+  comment: string;
+  createdAt: string;
+}
+
+export interface ReviewSearchResult {
+  /** 'semantic' = match_reviews by embedding; 'latest' = fallback when there is no query vector. */
+  method: 'semantic' | 'latest';
+  reviews: ReviewSnippet[];
+}
+
+/**
+ * Reviews for the search_reviews chatbot tool: the closest matches to `queryVector`
+ * (match_reviews), or the latest reviews when the vector is missing or the search fails.
+ */
+export async function searchStationReviews(
+  db: Db,
+  stationId: string,
+  queryVector: number[] | null,
+  limit: number = APP_CONFIG.REVIEW_SEARCH_LIMIT,
+): Promise<ReviewSearchResult> {
+  const snippet = (comment: string) => reviewSnippet(comment, APP_CONFIG.REVIEW_SNIPPET_MAX_CHARS);
+
+  if (queryVector) {
+    const [{ data: matches, error }, { data: facilities, error: facilityError }] = await Promise.all([
+      db.rpc('match_reviews', { query_embedding: toPgVector(queryVector), p_station_id: stationId, match_count: limit }),
+      db.from('facilities').select('id, name').eq('station_id', stationId),
+    ]);
+    if (!error && !facilityError) {
+      const names = new Map(facilities.map((f) => [f.id, f.name]));
+      return {
+        method: 'semantic',
+        reviews: matches.map((m) => ({
+          reviewId: m.review_id,
+          facilityId: m.facility_id,
+          facilityName: names.get(m.facility_id) ?? '',
+          rating: m.rating,
+          comment: snippet(m.comment),
+          createdAt: m.created_at,
+        })),
+      };
+    }
+    console.error('Review search failed, using latest reviews:', error?.code ?? facilityError?.code ?? 'unknown');
+  }
+
+  const latest = await listStationReviews(db, stationId, limit);
+  return {
+    method: 'latest',
+    reviews: latest.map((r) => ({
+      reviewId: r.id,
+      facilityId: r.facilityId,
+      facilityName: r.facilityName ?? '',
+      rating: r.rating,
+      comment: snippet(r.comment),
+      createdAt: r.createdAt,
+    })),
+  };
 }
 
 /**
