@@ -10,7 +10,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "typecheck": "tsc --noEmit",
-    "db:seed": "ts-node -P scripts/tsconfig.json scripts/seed.ts"
+    "db:seed": "ts-node -P scripts/tsconfig.json scripts/seed.ts",
+    "map:krl-lines": "ts-node -P scripts/tsconfig.json scripts/fetch-krl-lines.ts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
