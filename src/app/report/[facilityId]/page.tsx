@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { stationService } from '@/lib/services/stationService';
 import { reportService } from '@/lib/services/reportService';
+import { reportErrorMessage } from '@/lib/reports/messages';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { FacilityWithStatus, ReportStatus } from '@/lib/types';
@@ -75,19 +76,22 @@ export default function ReportPage({ params }: PageProps) {
 
     setIsSubmitting(true);
     try {
-      await reportService.createReport({
+      const { stampAwarded } = await reportService.createReport({
         facilityId,
-        userId: user!.id,
-        userName: user!.displayName,
         status: selectedStatus,
         photoUrl: photoDataUrl,
         note,
       });
 
-      showToast('Laporan berhasil dikirim! Stamp fasilitas diperoleh 🎉', 'success');
+      showToast(
+        stampAwarded
+          ? 'Laporan berhasil dikirim! Stamp fasilitas diperoleh 🎉'
+          : 'Laporan berhasil dikirim! Terima kasih.',
+        'success'
+      );
       router.push(`/stations/${facility?.stationId || ''}`);
-    } catch {
-      showToast('Gagal mengirim laporan. Coba beberapa saat lagi.', 'error');
+    } catch (err) {
+      showToast(reportErrorMessage(err), 'error');
     } finally {
       setIsSubmitting(false);
     }
