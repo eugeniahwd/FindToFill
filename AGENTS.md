@@ -12,7 +12,7 @@ FindToFill is a mobile-first web app for KRL Commuter Line passengers (Jabodetab
 1. Budget under IDR 100,000: free plans only. Never add a paid service, never ask for or use a payment card. If something needs billing, stop and tell me.
 2. Scope: build only what docs/SPEC.md lists. Do not add features (see "Out of scope").
 3. The stack is fixed. Do not swap or add frameworks or major libraries without asking.
-4. Secrets: never commit or print keys. Use .env.local and keep .env.example updated. SUPABASE_SERVICE_ROLE_KEY and GEMINI_API_KEY are server-only, never NEXT_PUBLIC_.
+4. Secrets: never commit or print keys. Use .env.local and keep .env.example updated. SUPABASE_SERVICE_ROLE_KEY, GROQ_API_KEY, and GEMINI_API_KEY are server-only, never NEXT_PUBLIC_.
 5. The chatbot must never invent a station, facility, status, distance, or time. Facts come only from tool results.
 6. Do not create cloud accounts, projects, or API keys yourself. List the manual steps for me and wait.
 7. Ask before destructive actions (dropping tables, force pushes, deleting files outside the task) and before anything that runs against a remote database.
@@ -22,11 +22,12 @@ FindToFill is a mobile-first web app for KRL Commuter Line passengers (Jabodetab
 - Backend: Next.js Route Handlers in src/app/api (no separate Express server)
 - Supabase free plan: PostgreSQL + pgvector, Auth (email and password), Storage, Row Level Security on every table
 - Map: Leaflet (react-leaflet) with OpenStreetMap tiles, client-only (dynamic import, ssr false). No Google Maps.
-- AI: Gemini API via the official @google/genai SDK (function calling and embeddings). Model IDs come from env vars GEMINI_MODEL and GEMINI_EMBEDDING_MODEL. Check current Google docs for model names and the embedding dimension before coding.
+- AI chatbot: Groq API via the official groq-sdk (chat completions with tool calling), free tier. Model ID comes from env var GROQ_MODEL. Check current Groq docs (console.groq.com/docs/models and /docs/deprecations) for model names before coding.
+- Embeddings: Gemini API via the official @google/genai SDK, used ONLY for review embeddings (Groq has no embedding models). Model ID comes from GEMINI_EMBEDDING_MODEL. Check current Google docs for model names and the embedding dimension before coding.
 - Validation: zod on every API input. Unit tests: Jest. Icons: lucide-react.
 
 ## Repo layout
-src/app (pages, api), src/components, src/lib (supabase, gemini, geo, rate-limit, config), src/lib/chatbot (quickMessages, tools, orchestrator, prompts), supabase/migrations, supabase/seed, tests, docs.
+src/app (pages, api), src/components, src/lib (supabase, groq, gemini, geo, rate-limit, config), src/lib/chatbot (quickMessages, tools, orchestrator, prompts), supabase/migrations, supabase/seed, tests, docs.
 
 ## Coding conventions
 - TypeScript strict, no any, small functions, named exports.

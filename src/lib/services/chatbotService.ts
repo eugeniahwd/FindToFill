@@ -4,7 +4,7 @@ import { findNearestStation } from '../utils/geo';
 import { reviewService } from './reviewService';
 
 export const chatbotService = {
-  // TODO(backend): Replace with POST /api/chat with Gemini function calling and tool orchestration
+  // TODO(Sprint 5): Replace with POST /api/chat (Groq tool calling + orchestrator in src/lib/chatbot)
   async ask(
     quickMessageId: QuickMessageId,
     coords?: { latitude: number; longitude: number } | null,

@@ -8,6 +8,7 @@ markdown
 - Tool calling for all live structured data. RAG (embeddings) only for review text.
 - The model never sees or supplies coordinates. The server injects them into tools.
 - Facility cards are built by the server from database rows. The model only chooses facility ids and writes a short message.
+- Providers: the chat model runs on Groq (groq-sdk, model from GROQ_MODEL, free tier). Review embeddings run on Gemini (gemini-embedding-001, 768-d) because Groq has no embedding models. Groq was chosen for chat because one question can take up to 6 model calls, which exhausted the Gemini free-tier limits.
 
 ## Quick messages (Indonesian text, English intent)
 | id | Text | Expected tool sequence |
@@ -67,10 +68,10 @@ Config: KAI_CONTACT is a constant in src/lib/config.ts. The team must verify the
 2. Rate limit: user id if logged in, otherwise IP hash. 20 chat requests per hour.
 3. Build the request: system prompt, fixed quick message text, tool declarations (the five tools above), low temperature (0.2).
 4. Loop up to 6 iterations: if the model returns function calls, execute them (each with a timeout), append the results, call again. Stop when the model returns text.
-5. Final output: { message, facility_ids: string[] (max 3) }. If the SDK or model cannot combine function calling with structured output in one request, make a final second call WITHOUT tools to produce this JSON from the collected tool results.
+5. Final output: { message, facility_ids: string[] (max 3) }. Groq does not support tool use and structured outputs (response_format json_schema) in the same request, so make a final second call WITHOUT tools to produce this JSON from the collected tool results. Strict json_schema mode is available on the GPT-OSS models. GPT-OSS models are reasoning models: use a low reasoning effort to stay within the latency target.
 6. Validate: every facility_id must appear in the tool results of this request, message length is at most 400 characters. Build cards from database rows by facility id (name, location detail, distance, status, last report time). Drop invalid ids. If nothing valid remains for a facility question, return fallback_no_data.
 7. Set scheduleReminder = true if get_next_train was used.
-8. Hard timeout 10 seconds overall. On Gemini errors, quota (429), or timeout, return outcome fallback_ai_unavailable with the message "Asisten sedang tidak tersedia. Lihat peta untuk fasilitas terdekat." and a map link. Also set the Vercel route maxDuration according to the Vercel Hobby limits (check current docs).
+8. Hard timeout 10 seconds overall. On Groq errors, quota (429), or timeout, return outcome fallback_ai_unavailable with the message "Asisten sedang tidak tersedia. Lihat peta untuk fasilitas terdekat." and a map link. Also set the Vercel route maxDuration according to the Vercel Hobby limits (check current docs).
 9. Log to chat_logs: session id, quick message id, tool names, outcome, latency, station id. Never log coordinates or review text.
 
 ## Review embeddings
