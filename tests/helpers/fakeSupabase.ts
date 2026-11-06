@@ -73,8 +73,18 @@ export function fakeSupabase(handlers: Record<string, Handler>) {
     },
   };
 
+  // db.rpc('fn', args): handler key "rpc.fn", args recorded as payload.
+  function rpc(fn: string, args?: unknown) {
+    const call: FakeCall = { table: 'rpc', op: fn, payload: args, filters: [] };
+    calls.push(call);
+    return {
+      then: (resolve: (r: FakeResult) => unknown, reject?: (e: unknown) => unknown) =>
+        Promise.resolve().then(() => run(call)).then(resolve, reject),
+    };
+  }
+
   return {
-    client: { from, storage } as never,
+    client: { from, storage, rpc } as never,
     calls,
     find: (key: string) => calls.filter((c) => `${c.table}.${c.op}` === key),
   };

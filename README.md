@@ -106,6 +106,10 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 | `src/lib/data/` | Server data access (`stations.ts`, `reviews.ts`, signed photo URLs in `photos.ts`), reusable by the chatbot tools |
 | `src/lib/gemini/embeddings.ts` | `embedText(text, 'document' \| 'query')`: 768-d unit vector or `null` (never throws). Also for the `search_reviews` tool |
 | `src/lib/groq/client.ts` | `getGroqClient()` (server-only, no retries, 10 s timeout; `null` without a key) and `getChatModel()` for the chatbot |
+| `src/lib/data/schedules.ts` | `getNextTrains(db, stationId, { line?, walkTimeMin? })` for `get_next_train`: WIB clock, weekday/weekend timetable, next 2 per line and direction, `timeCheck` (2 × walk + 1 min). `dataAvailable: false` when there is no timetable |
+| `searchStationReviews()` in `src/lib/data/reviews.ts` | For `search_reviews`: `match_reviews` with a query vector (`embedQueryCached()` caches the fixed query), falls back to the 5 latest reviews. Comments max 300 chars, URLs removed |
+| `src/lib/data/chatLogs.ts` | `logChat(admin, entry)`: writes `chat_logs` with only allowed fields (no coordinates, no review text); never throws. `normalizeSessionId()` |
+| `chatRateLimitKey()`, `consumeRateLimit()` in `src/lib/rate-limit.ts` | Chat limit 20/hour: user id when logged in, otherwise an HMAC of the IP (`IP_HASH_SALT`), so raw IPs are never stored |
 
 **Manual setup (once per team):**
 
@@ -122,6 +126,8 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 7. Open `/api/health` and expect `{ "ok": true, "stations": 3 }`.
 8. Create a free API key in [Google AI Studio](https://aistudio.google.com/apikey) in the **Default Gemini Project** (Free tier, no billing) and put it in `GEMINI_API_KEY`. It is used only for review embeddings. Without it, reviews still save but have no embedding (the chatbot then falls back to the latest reviews).
 9. Create a free API key in the [Groq console](https://console.groq.com/keys) (no payment card) and put it in `GROQ_API_KEY`. It runs the chatbot. Without it, the chatbot answers with the "assistant unavailable" fallback.
+
+10. Put a long random string in `IP_HASH_SALT` (for example the output of `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`). It hashes guest IPs for the chat rate limit. Local dev works without it; production requires it.
 
 Restart `npm run dev` after editing `.env.local`. Each teammate should create their own free keys instead of sharing one.
 

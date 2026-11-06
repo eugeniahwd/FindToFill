@@ -27,6 +27,19 @@ export function toPgVector(values: number[]): string {
   return `[${values.join(',')}]`;
 }
 
+// The chatbot's search queries are fixed strings, so each is embedded once per server instance.
+const queryCache = new Map<string, number[]>();
+const QUERY_CACHE_MAX = 20;
+
+/** embedText(text, 'query') with an in-memory cache. Failures are not cached, so they retry next time. */
+export async function embedQueryCached(text: string): Promise<number[] | null> {
+  const cached = queryCache.get(text);
+  if (cached) return cached;
+  const vector = await embedText(text, 'query');
+  if (vector && queryCache.size < QUERY_CACHE_MAX) queryCache.set(text, vector);
+  return vector;
+}
+
 export async function embedText(text: string, purpose: EmbeddingPurpose): Promise<number[] | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_EMBEDDING_MODEL;

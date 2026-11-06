@@ -27,6 +27,15 @@ export const APP_CONFIG = {
 
   // Chatbot (Groq). SPEC: answer within 3 s in 90% of runs, hard timeout 10 s, then fallback.
   CHAT_TIMEOUT_MS: 10_000,
+  // search_reviews tool: top matches, each comment cut to this length (URLs removed).
+  REVIEW_SEARCH_LIMIT: 5,
+  REVIEW_SNIPPET_MAX_CHARS: 300,
+
+  // Train schedules (get_next_train tool). Station clocks run on WIB; Sat/Sun use the weekend timetable.
+  TIMEZONE: 'Asia/Jakarta',
+  NEXT_TRAINS_PER_DIRECTION: 2,
+  // SPEC default 3: "enough time" = 2 x one-way walk + 1 minute to fill <= minutes until the next train.
+  REFILL_MINUTES: 1,
 
   // Rate Limits
   MAX_REPORTS_PER_HOUR: 5,
