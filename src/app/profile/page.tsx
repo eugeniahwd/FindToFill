@@ -37,8 +37,7 @@ export default function ProfilePage() {
         return;
       }
       try {
-        const all = await reportService.getAllReports();
-        const userReports = all.filter((r) => r.userId === user.id).slice(0, 10);
+        const userReports = await reportService.getMyReports();
         setMyReports(userReports);
 
         // Fetch facility details

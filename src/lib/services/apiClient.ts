@@ -18,17 +18,21 @@ function isApiErrorBody(body: unknown): body is ApiErrorBody {
   return typeof error === 'object' && error !== null && 'code' in error && 'message' in error;
 }
 
-/** Calls our own /api routes. Sends JSON when a body is given; session cookies go along automatically. */
+function encodeBody(body: unknown): RequestInit {
+  if (body === undefined) return {};
+  // The browser sets the multipart boundary header itself.
+  if (body instanceof FormData) return { body };
+  return { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+/**
+ * Calls our own /api routes. Sends JSON (or FormData as multipart) when a body is given;
+ * session cookies go along automatically.
+ */
 export async function apiRequest<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, {
-      method: init.method ?? 'GET',
-      cache: 'no-store',
-      ...(init.body === undefined
-        ? {}
-        : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(init.body) }),
-    });
+    response = await fetch(path, { method: init.method ?? 'GET', cache: 'no-store', ...encodeBody(init.body) });
   } catch {
     throw new ApiRequestError(0, 'NETWORK_ERROR', 'Cannot reach the server. Check your connection.');
   }

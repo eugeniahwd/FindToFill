@@ -1,10 +1,50 @@
 import { Report, ReportStatus } from '../types';
 import { MOCK_REPORTS } from '../mock/data';
-import { communityService } from './communityService';
+import { dataUrlToBlob } from '../reports/dataUrl';
+import { apiRequest } from './apiClient';
 
-let dynamicReports: Report[] = [...MOCK_REPORTS];
+const dynamicReports: Report[] = [...MOCK_REPORTS];
+
+export interface SubmitReportResult {
+  report: Report;
+  /** True when this was the user's first report or review for the facility. */
+  stampAwarded: boolean;
+}
 
 export const reportService = {
+  /**
+   * Sends the report to POST /api/reports. The user comes from the session cookie;
+   * userId/userName are accepted for compatibility but not sent.
+   */
+  async createReport(params: {
+    facilityId: string;
+    userId?: string;
+    userName?: string;
+    status: ReportStatus;
+    /** Compressed photo as a data URL (from PhotoUploader). */
+    photoUrl: string;
+    note?: string;
+  }): Promise<SubmitReportResult> {
+    const form = new FormData();
+    form.set('facilityId', params.facilityId);
+    form.set('status', params.status);
+    if (params.note?.trim()) form.set('note', params.note.trim());
+    const photo = dataUrlToBlob(params.photoUrl);
+    form.set('photo', photo, `photo.${photo.type === 'image/png' ? 'png' : 'jpg'}`);
+
+    return apiRequest<SubmitReportResult>('/api/reports', { method: 'POST', body: form });
+  },
+
+  /** The signed-in user's 10 most recent reports. */
+  async getMyReports(): Promise<Report[]> {
+    const { reports } = await apiRequest<{ reports: Report[] }>('/api/me/reports');
+    return reports;
+  },
+
+  // ---------------------------------------------------------------------------
+  // Still mock data until the admin moderation API (Sprint 6).
+  // ---------------------------------------------------------------------------
+
   // TODO(backend): Replace with supabase.from('reports').select('*').eq('facility_id', facilityId).is('removed_at', null)
   async getFacilityReports(facilityId: string): Promise<Report[]> {
     await new Promise((r) => setTimeout(r, 150));
@@ -16,7 +56,7 @@ export const reportService = {
       );
   },
 
-  // TODO(backend): Replace with supabase.from('reports').select('*, facilities(name, station_id), profiles(display_name)')
+  // TODO(backend): Replace with the admin moderation API (Sprint 6)
   async getAllReports(): Promise<Report[]> {
     await new Promise((r) => setTimeout(r, 200));
     return [...dynamicReports].sort(
@@ -25,37 +65,7 @@ export const reportService = {
     );
   },
 
-  // TODO(backend): Replace with supabase.from('reports').insert(...) and server-side stamp check
-  async createReport(params: {
-    facilityId: string;
-    userId: string;
-    userName?: string;
-    status: ReportStatus;
-    photoUrl: string;
-    note?: string;
-  }): Promise<Report> {
-    await new Promise((r) => setTimeout(r, 400));
-    const newReport: Report = {
-      id: `rep-${Date.now()}`,
-      facilityId: params.facilityId,
-      userId: params.userId,
-      userName: params.userName || 'Anonymous Commuter',
-      status: params.status,
-      photoUrl: params.photoUrl,
-      note: params.note?.trim() ? params.note.trim().slice(0, 140) : undefined,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Add to top of reports
-    dynamicReports = [newReport, ...dynamicReports];
-
-    // Award stamp for first report
-    await communityService.awardStamp(params.userId, params.facilityId);
-
-    return newReport;
-  },
-
-  // TODO(backend): Replace with supabase.from('reports').update({ removed_at: now(), removed_by: adminId }).eq('id', id)
+  // TODO(backend): Replace with the admin moderation API (Sprint 6)
   async removeReport(reportId: string, adminId: string): Promise<void> {
     await new Promise((r) => setTimeout(r, 250));
     const index = dynamicReports.findIndex((r) => r.id === reportId);
@@ -68,7 +78,7 @@ export const reportService = {
     }
   },
 
-  // TODO(backend): Replace with supabase admin action
+  // TODO(backend): Replace with the admin moderation API (Sprint 6)
   async restoreReport(reportId: string): Promise<void> {
     await new Promise((r) => setTimeout(r, 250));
     const index = dynamicReports.findIndex((r) => r.id === reportId);
