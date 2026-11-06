@@ -10,6 +10,7 @@ import { RATE_LIMITS, assertWithinRateLimit, recordRateLimitEvent } from '@/lib/
 import { toReport } from './mappers';
 import { REPORT_PHOTO_BUCKET, signReportPhotos } from './photos';
 import { awardStamp } from './stamps';
+import { bestEffort } from './bestEffort';
 
 type Db = SupabaseClient<Database>;
 
@@ -71,8 +72,8 @@ export async function submitReport(
   }
 
   // The report is saved at this point; failures below must not make the client resend it.
-  const stampAwarded = await bestEffort(() => awardStamp(admin, userId, fields.facilityId), false);
-  await bestEffort(() => recordRateLimitEvent(admin, userId, RATE_LIMITS.report), undefined);
+  const stampAwarded = await bestEffort('Report stamp', () => awardStamp(admin, userId, fields.facilityId), false);
+  await bestEffort('Report rate-limit event', () => recordRateLimitEvent(admin, userId, RATE_LIMITS.report), undefined);
 
   const urls = await signReportPhotos([photoPath]);
   return { report: toReport(row, urls.get(photoPath) ?? null), stampAwarded };
@@ -91,13 +92,4 @@ export async function listUserReports(db: Db, userId: string, limit = 10): Promi
 
   const urls = await signReportPhotos(data.map((r) => r.photo_path));
   return data.map((row) => toReport(row, urls.get(row.photo_path) ?? null));
-}
-
-async function bestEffort<T>(task: () => Promise<T>, fallback: T): Promise<T> {
-  try {
-    return await task();
-  } catch (err) {
-    console.error('Report follow-up step failed:', err instanceof Error ? err.name : typeof err);
-    return fallback;
-  }
 }

@@ -1,11 +1,21 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Droplet, Zap, Compass } from 'lucide-react';
+import { Droplet, Zap, Compass, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { FacilityWithStatus, StationLayout } from '@/lib/types';
 import { StatusBadge } from '../common/StatusBadge';
 import { BottomSheet } from '../common/BottomSheet';
 import { formatTimeAgo } from '@/lib/utils/status';
+
+/** facilities.level defaults to 'L1' in the database. */
+function facilityLevel(facility: FacilityWithStatus): string {
+  return facility.level ?? 'L1';
+}
+
+export function stationLevels(layouts: StationLayout[], facilities: FacilityWithStatus[]): string[] {
+  const levels = layouts.length > 0 ? layouts.map((l) => l.level) : facilities.map(facilityLevel);
+  return [...new Set(levels)].sort();
+}
 
 interface StationLayoutMapProps {
   stationName: string;
@@ -21,32 +31,45 @@ export const StationLayoutMap: React.FC<StationLayoutMapProps> = ({
   const [activeLevelIndex, setActiveLevelIndex] = useState(0);
   const [selectedFacility, setSelectedFacility] = useState<FacilityWithStatus | null>(null);
 
-  const currentLayout = layouts[activeLevelIndex] || layouts[0];
+  // Levels come from the layout images; until a station has any, from its facilities.
+  const levels = stationLevels(layouts, facilities);
+  const currentLevel = levels[activeLevelIndex] ?? levels[0];
+  const currentLayout = layouts.find((l) => l.level === currentLevel);
+  const levelFacilities = facilities.filter((f) => facilityLevel(f) === currentLevel);
+  const placedFacilities = levelFacilities.filter((f) => f.layoutX !== undefined && f.layoutY !== undefined);
+  const unplacedCount = levelFacilities.length - placedFacilities.length;
 
-  // Filter facilities on this level (or show all if level matching is loose)
-  const currentLevelFacilities = facilities.filter((f) => {
-    if (!currentLayout) return true;
-    if (!f.level) return true;
+  const markers = placedFacilities.map((fac) => {
+    const isWater = fac.type === 'water';
     return (
-      f.level.toLowerCase().includes(currentLayout.level.toLowerCase().slice(0, 2)) ||
-      currentLayout.level.toLowerCase().includes(f.level.toLowerCase().slice(0, 2))
+      <button
+        key={fac.id}
+        onClick={() => setSelectedFacility(fac)}
+        style={{ left: `${fac.layoutX}%`, top: `${fac.layoutY}%` }}
+        aria-label={`${fac.name} (${isWater ? 'Water' : 'Charging'})`}
+        className={`absolute -translate-x-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full flex items-center justify-center shadow-md border-2 border-white transition-transform hover:scale-110 active:scale-95 ${
+          isWater ? 'bg-[#011638] text-white' : 'bg-[#FFD233] text-[#011638]'
+        }`}
+      >
+        {isWater ? <Droplet size={16} /> : <Zap size={16} />}
+      </button>
     );
   });
 
   return (
     <div className="flex flex-col gap-3">
       {/* Level Tabs */}
-      {layouts.length > 1 && (
+      {levels.length > 1 && (
         <div
           role="tablist"
           aria-label="Pilihan Lantai Denah"
           className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl"
         >
-          {layouts.map((layout, idx) => {
+          {levels.map((level, idx) => {
             const isActive = idx === activeLevelIndex;
             return (
               <button
-                key={layout.id}
+                key={level}
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setActiveLevelIndex(idx)}
@@ -56,26 +79,42 @@ export const StationLayoutMap: React.FC<StationLayoutMapProps> = ({
                     : 'text-slate-600 hover:text-navy'
                 }`}
               >
-                {layout.level}
+                {level}
               </button>
             );
           })}
         </div>
       )}
 
-      {/* Schematic Floor Plan Canvas */}
+      {currentLayout?.imageUrl ? (
+        // Official layout image: markers use percentages of the image itself.
+        <div className="relative w-full rounded-2xl overflow-hidden border-2 border-slate-200 bg-white">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={currentLayout.imageUrl}
+            alt={`Denah Stasiun ${stationName} lantai ${currentLevel}`}
+            className="block w-full h-auto"
+          />
+          {markers}
+        </div>
+      ) : (
+      /* Schematic placeholder until the team uploads a layout image */
       <div className="relative w-full aspect-[4/3] bg-slate-50 border-2 border-slate-200 rounded-2xl overflow-hidden p-3 shadow-inner">
         {/* Compass / Orientation */}
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-white/80 px-2 py-1 rounded-md text-[10px] font-bold text-slate-500 backdrop-blur-xs">
           <Compass size={12} className="text-[#00628C]" />
-          <span>Utara ▲</span>
+          <span>Utara</span>
+          <ArrowUp size={10} aria-hidden="true" />
         </div>
 
         {/* Floor Schematic Drawing (Divs & Blocks representing station layout) */}
         <div className="w-full h-full relative rounded-xl border border-dashed border-slate-300 p-2 bg-[#f4f7f6]">
           {/* Platform tracks / blocks */}
           <div className="absolute top-8 left-4 right-4 h-10 bg-slate-200/80 rounded-lg flex items-center justify-between px-3 text-[10px] font-bold text-slate-600">
-            <span>◄ Jalur 1 & 2 (Peron Arah Bogor)</span>
+            <span className="flex items-center gap-1">
+              <ChevronLeft size={12} aria-hidden="true" />
+              Jalur 1 & 2 (Peron Arah Bogor)
+            </span>
             <span className="px-1.5 py-0.5 rounded bg-white/80 text-slate-500 text-[9px]">Platform</span>
           </div>
 
@@ -85,7 +124,10 @@ export const StationLayoutMap: React.FC<StationLayoutMapProps> = ({
           </div>
 
           <div className="absolute bottom-8 left-4 right-4 h-10 bg-slate-200/80 rounded-lg flex items-center justify-between px-3 text-[10px] font-bold text-slate-600">
-            <span>Jalur 3 & 4 (Peron Arah Jakarta Kota) ►</span>
+            <span className="flex items-center gap-1">
+              Jalur 3 & 4 (Peron Arah Jakarta Kota)
+              <ChevronRight size={12} aria-hidden="true" />
+            </span>
             <span className="px-1.5 py-0.5 rounded bg-white/80 text-slate-500 text-[9px]">Platform</span>
           </div>
 
@@ -97,45 +139,37 @@ export const StationLayoutMap: React.FC<StationLayoutMapProps> = ({
             Pintu Timur
           </div>
 
-          {/* Interactive Facility Markers positioned with layoutX and layoutY */}
-          {currentLevelFacilities.map((fac) => {
-            const isWater = fac.type === 'water';
-            const left = `${fac.layoutX ?? 50}%`;
-            const top = `${fac.layoutY ?? 50}%`;
+          {/* Facility markers positioned with layoutX and layoutY */}
+          {markers}
+        </div>
 
-            return (
-              <button
-                key={fac.id}
-                onClick={() => setSelectedFacility(fac)}
-                style={{ left, top }}
-                aria-label={`${fac.name} (${fac.type})`}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full flex items-center justify-center shadow-md border-2 border-white transition-transform hover:scale-110 active:scale-95 ${
-                  isWater ? 'bg-[#011638] text-white' : 'bg-[#FFD233] text-[#011638]'
-                }`}
-              >
-                {isWater ? (
-                  <Droplet size={15} />
-                ) : (
-                  <Zap size={15} />
-                )}
-              </button>
-            );
-          })}
+        <div className="absolute bottom-2 right-2 z-10 px-2 py-0.5 rounded-md bg-white/80 text-[9px] font-semibold text-slate-500">
+          Denah ilustrasi
         </div>
       </div>
+      )}
+
+      {levelFacilities.length === 0 && (
+        <p className="text-xs text-slate-500 text-center">Belum ada fasilitas di lantai ini.</p>
+      )}
+      {unplacedCount > 0 && (
+        <p className="text-xs text-slate-500 text-center">
+          {unplacedCount} fasilitas belum punya posisi di denah. Lihat di Daftar Fasilitas.
+        </p>
+      )}
 
       {/* Legend & Layout Notes */}
       <div className="flex items-center justify-between px-2 py-1 bg-white rounded-xl border border-slate-100 text-xs">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 font-medium text-slate-700">
-            <span className="w-3.5 h-3.5 rounded-full bg-[#011638] flex items-center justify-center text-white text-[9px]">
-              💧
+            <span className="w-4 h-4 rounded-full bg-[#011638] flex items-center justify-center text-white">
+              <Droplet size={10} aria-hidden="true" />
             </span>
             <span>Water</span>
           </div>
           <div className="flex items-center gap-1.5 font-medium text-slate-700">
-            <span className="w-3.5 h-3.5 rounded-full bg-[#FFD233] flex items-center justify-center text-[#011638] text-[9px]">
-              ⚡
+            <span className="w-4 h-4 rounded-full bg-[#FFD233] flex items-center justify-center text-[#011638]">
+              <Zap size={10} aria-hidden="true" />
             </span>
             <span>Charging</span>
           </div>

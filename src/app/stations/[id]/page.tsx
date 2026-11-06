@@ -24,9 +24,10 @@ import {
 } from '@/lib/types';
 import { FacilityCard } from '@/components/facility/FacilityCard';
 import { StationLayoutMap } from '@/components/facility/StationLayoutMap';
-import { BottomSheet } from '@/components/common/BottomSheet';
+import { ReviewSheet } from '@/components/review/ReviewSheet';
 import { EmptyState } from '@/components/common/EmptyState';
 import { FacilityCardSkeleton } from '@/components/common/LoadingSkeleton';
+import type { SubmitReviewResult } from '@/lib/services/reviewService';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -49,11 +50,7 @@ export default function StationDetailPage({ params }: PageProps) {
   const [activeTab, setActiveTab] = useState<'facilities' | 'layout'>('facilities');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Review bottom sheet
   const [showReviewModal, setShowReviewModal] = useState(false);
-  const [ratingInput, setRatingInput] = useState(5);
-  const [commentInput, setCommentInput] = useState('');
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   useEffect(() => {
     async function loadStationData() {
@@ -72,7 +69,7 @@ export default function StationDetailPage({ params }: PageProps) {
         setReviews(revs);
 
         if (user) {
-          const favs = await communityService.getFavorites(user.id);
+          const favs = await communityService.getFavorites();
           setIsFavorited(favs.includes(stationId));
         }
       } catch (err) {
@@ -87,7 +84,7 @@ export default function StationDetailPage({ params }: PageProps) {
   const handleToggleFavorite = async () => {
     if (!requireAuth(`/stations/${stationId}`)) return;
     try {
-      const nowFav = await communityService.toggleFavorite(user!.id, stationId);
+      const nowFav = await communityService.setFavorite(stationId, !isFavorited);
       setIsFavorited(nowFav);
       showToast(
         nowFav
@@ -105,39 +102,10 @@ export default function StationDetailPage({ params }: PageProps) {
     setShowReviewModal(true);
   };
 
-  const handleSubmitReview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentInput.trim()) {
-      showToast('Harap tuliskan ulasan Anda.', 'error');
-      return;
-    }
-
-    // Pick first water facility or general facility
-    const targetFac = facilities.find((f) => f.type === 'water') || facilities[0];
-    if (!targetFac) {
-      showToast('Tidak ada fasilitas untuk diulas.', 'error');
-      return;
-    }
-
-    setIsSubmittingReview(true);
-    try {
-      const newRev = await reviewService.addReview({
-        facilityId: targetFac.id,
-        userId: user!.id,
-        userName: user!.displayName,
-        rating: ratingInput,
-        comment: commentInput,
-      });
-
-      setReviews([newRev, ...reviews]);
-      setShowReviewModal(false);
-      setCommentInput('');
-      showToast('Ulasan berhasil dikirim! Stamp diperoleh 🎉', 'success');
-    } catch {
-      showToast('Gagal mengirim ulasan.', 'error');
-    } finally {
-      setIsSubmittingReview(false);
-    }
+  const handleReviewSaved = ({ review }: SubmitReviewResult) => {
+    // A new review goes on top; an edited one replaces its old version.
+    setReviews((prev) => [review, ...prev.filter((r) => r.id !== review.id)]);
+    setShowReviewModal(false);
   };
 
   if (isLoading) {
@@ -162,10 +130,11 @@ export default function StationDetailPage({ params }: PageProps) {
     );
   }
 
+  // No reviews yet: show no rating rather than an invented one.
   const averageRating =
     reviews.length > 0
       ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
-      : '5.0';
+      : '-';
 
   return (
     <div className="flex-1 flex flex-col p-4 gap-4 pb-28">
@@ -294,66 +263,16 @@ export default function StationDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Review Modal */}
-      <BottomSheet
-        isOpen={showReviewModal}
-        onClose={() => setShowReviewModal(false)}
-        title={`Ulasan Stasiun ${station.name}`}
-        description="Bagikan pengalaman kualitas air minum atau pengisian daya di stasiun ini."
-      >
-        <form onSubmit={handleSubmitReview} className="flex flex-col gap-4">
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Rating Kualitas (1 - 5 Bintang)
-            </label>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  type="button"
-                  key={star}
-                  onClick={() => setRatingInput(star)}
-                  className="min-touch-target p-1 text-amber-400 hover:scale-110 transition-transform"
-                >
-                  <Star
-                    size={28}
-                    fill={star <= ratingInput ? 'currentColor' : 'none'}
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="review-comment"
-              className="block text-xs font-semibold text-slate-700 mb-1"
-            >
-              Ulasan Anda (maks 500 karakter)
-            </label>
-            <textarea
-              id="review-comment"
-              rows={4}
-              maxLength={500}
-              required
-              value={commentInput}
-              onChange={(e) => setCommentInput(e.target.value)}
-              placeholder="Ceritakan rasa air, kebersihan dispenser, kelancaran aliran, dll..."
-              className="w-full p-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#00628C]"
-            />
-            <div className="text-[11px] text-slate-400 text-right mt-1">
-              {commentInput.length}/500
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmittingReview}
-            className="min-touch-target py-3 rounded-xl bg-[#011638] text-white font-bold text-sm hover:bg-[#002255] transition-colors disabled:opacity-50"
-          >
-            {isSubmittingReview ? 'Mengirim...' : 'Kirim Ulasan'}
-          </button>
-        </form>
-      </BottomSheet>
+      {showReviewModal && (
+        <ReviewSheet
+          title={`Ulasan Stasiun ${station.name}`}
+          description="Bagikan pengalaman kualitas air minum atau pengisian daya di stasiun ini."
+          facilities={facilities}
+          myReviews={reviews.filter((r) => r.userId === user?.id)}
+          onClose={() => setShowReviewModal(false)}
+          onSaved={handleReviewSaved}
+        />
+      )}
     </div>
   );
 }

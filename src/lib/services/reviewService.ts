@@ -1,37 +1,47 @@
 import { Review } from '../types';
-import { MOCK_REVIEWS, MOCK_FACILITIES } from '../mock/data';
-import { communityService } from './communityService';
+import { MOCK_REVIEWS } from '../mock/data';
+import { apiRequest, isMissing } from './apiClient';
+
+export interface SubmitReviewResult {
+  review: Review;
+  /** false when the user edited their existing review for this facility. */
+  created: boolean;
+  /** True when this was the user's first report or review for the facility. */
+  stampAwarded: boolean;
+}
 
 let dynamicReviews: Review[] = [...MOCK_REVIEWS];
 
 export const reviewService = {
-  // TODO(backend): Replace with supabase.from('reviews').select('*, facilities!inner(station_id)').eq('facilities.station_id', stationId).is('removed_at', null)
+  /** Public: the station's reviews, newest first. */
   async getStationReviews(stationId: string): Promise<Review[]> {
-    await new Promise((r) => setTimeout(r, 150));
-    const stationFacilityIds = MOCK_FACILITIES.filter(
-      (f) => f.stationId === stationId
-    ).map((f) => f.id);
-
-    return dynamicReviews
-      .filter((rev) => stationFacilityIds.includes(rev.facilityId) && !rev.removedAt)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    try {
+      const { reviews } = await apiRequest<{ reviews: Review[] }>(
+        `/api/stations/${encodeURIComponent(stationId)}/reviews`,
       );
+      return reviews;
+    } catch (err) {
+      if (isMissing(err)) return [];
+      throw err;
+    }
   },
 
-  // TODO(backend): Replace with supabase.from('reviews').select('*').eq('facility_id', facilityId).is('removed_at', null)
-  async getFacilityReviews(facilityId: string): Promise<Review[]> {
-    await new Promise((r) => setTimeout(r, 100));
-    return dynamicReviews
-      .filter((r) => r.facilityId === facilityId && !r.removedAt)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
+  /**
+   * Creates the signed-in user's review for a facility, or edits it if they already
+   * reviewed it. The user comes from the session cookie.
+   */
+  async submitReview(params: { facilityId: string; rating: number; comment: string }): Promise<SubmitReviewResult> {
+    return apiRequest<SubmitReviewResult>('/api/reviews', {
+      method: 'POST',
+      body: { facilityId: params.facilityId, rating: params.rating, comment: params.comment.trim() },
+    });
   },
 
-  // TODO(backend): Replace with supabase.from('reviews').select('*, facilities(name, station_id), profiles(display_name)')
+  // ---------------------------------------------------------------------------
+  // Still mock data until the admin moderation API (Sprint 6).
+  // ---------------------------------------------------------------------------
+
+  // TODO(backend): Replace with the admin moderation API (Sprint 6)
   async getAllReviews(): Promise<Review[]> {
     await new Promise((r) => setTimeout(r, 150));
     return [...dynamicReviews].sort(
@@ -40,56 +50,19 @@ export const reviewService = {
     );
   },
 
-  // TODO(backend): Replace with supabase.from('reviews').upsert(...) with embedding generation
-  async addReview(params: {
-    facilityId: string;
-    userId: string;
-    userName?: string;
-    rating: number;
-    comment: string;
-  }): Promise<Review> {
-    await new Promise((r) => setTimeout(r, 300));
-    const newRev: Review = {
-      id: `rev-${Date.now()}`,
-      facilityId: params.facilityId,
-      userId: params.userId,
-      userName: params.userName || 'Anonymous Commuter',
-      rating: Math.max(1, Math.min(5, params.rating)),
-      comment: params.comment.trim().slice(0, 500),
-      createdAt: new Date().toISOString(),
-    };
-
-    dynamicReviews = [newRev, ...dynamicReviews];
-
-    // Award stamp for first review
-    await communityService.awardStamp(params.userId, params.facilityId);
-
-    return newRev;
-  },
-
-  // TODO(backend): Replace with supabase.from('reviews').update({ removed_at: now(), removed_by: adminId }).eq('id', id)
+  // TODO(backend): Replace with the admin moderation API (Sprint 6)
   async removeReview(reviewId: string, adminId: string): Promise<void> {
     await new Promise((r) => setTimeout(r, 200));
-    const index = dynamicReviews.findIndex((r) => r.id === reviewId);
-    if (index !== -1) {
-      dynamicReviews[index] = {
-        ...dynamicReviews[index],
-        removedAt: new Date().toISOString(),
-        removedBy: adminId,
-      };
-    }
+    dynamicReviews = dynamicReviews.map((r) =>
+      r.id === reviewId ? { ...r, removedAt: new Date().toISOString(), removedBy: adminId } : r,
+    );
   },
 
-  // TODO(backend): Replace with supabase admin action
+  // TODO(backend): Replace with the admin moderation API (Sprint 6)
   async restoreReview(reviewId: string): Promise<void> {
     await new Promise((r) => setTimeout(r, 200));
-    const index = dynamicReviews.findIndex((r) => r.id === reviewId);
-    if (index !== -1) {
-      dynamicReviews[index] = {
-        ...dynamicReviews[index],
-        removedAt: null,
-        removedBy: null,
-      };
-    }
+    dynamicReviews = dynamicReviews.map((r) =>
+      r.id === reviewId ? { ...r, removedAt: null, removedBy: null } : r,
+    );
   },
 };
