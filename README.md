@@ -149,9 +149,8 @@ npm run start
 ```ts
 import type { ChatRequest, ChatResponse } from '@/lib/chatbot/contract';
 
-const body: ChatRequest = manualStationId
-  ? { quickMessageId, stationId: manualStationId, sessionId }
-  : { quickMessageId, lat: coords.latitude, lng: coords.longitude, sessionId };
+// selectedStation comes from LocationContext: detected in the browser or picked by the user.
+const body: ChatRequest = { quickMessageId, stationId: selectedStation.id, sessionId };
 
 const res = await fetch('/api/chat', {
   method: 'POST',
@@ -164,7 +163,7 @@ const data = (await res.json()) as ChatResponse;
 Request rules (anything else gets `400 rejected`):
 
 - `quickMessageId`: one of `QUICK_MESSAGE_IDS`. Take the button texts from `QUICK_MESSAGES` in [`src/lib/chatbot/quickMessages.ts`](src/lib/chatbot/quickMessages.ts); the server never reads client text.
-- Location: `lat` and `lng` together from geolocation, or `stationId` when the user picked a station. Send `stationId` only for a manual pick: it wins over GPS and makes distances approximate. With neither, the reply asks the user to pick a station.
+- `stationId`: the station the app shows, detected in the browser from GPS or picked by the user. GPS coordinates never go to the server: a request with `lat` or `lng` gets a 400. Without `stationId`, the reply asks the user to pick a station.
 - `sessionId` (optional): `crypto.randomUUID()`, kept for the browser session.
 - No other fields and no `null` values; omit a field instead.
 
@@ -177,8 +176,10 @@ Request rules (anything else gets `400 rejected`):
 | 429 | `rejected` | `message`. Retry after `retryAfterSec` seconds (also in the `Retry-After` header). |
 | 500 | `fallback_ai_unavailable` | `message` and a link to the map |
 
-Each card has `name`, `platform`, `locationDetail`, `distanceM` (add "approx." when `distanceIsApproximate`), `walkTimeMin`, `status` (`unknown` means "No recent report"), and `lastReportedAt` / `minutesAgo`. `detectedStation.name` is the station the answer is about; when `needsConfirmation` is true, ask the user to confirm it.
+Each card has `name`, `platform`, `locationDetail`, `distanceM`, `walkTimeMin`, `status` (`unknown` means "No recent report"), and `lastReportedAt` / `minutesAgo`. The server never has the user's position, so `distanceM` is measured from the station center and `distanceIsApproximate` is always true: show it as approximate. `detectedStation.name` is the station the answer is about.
 
-**Stub mode** (`CHATBOT_MODE` unset or `stub`) returns canned demo answers and needs no keys. Any GPS position is treated as Stasiun Manggarai, `stationId: "station-manggarai"` is a manual pick, any other `stationId` gets the no-data fallback, and a request without a location gets the station-picker fallback. `fake` and `live` return `fallback_ai_unavailable` until they are built. The limit is 20 requests per hour per IP, kept in memory, so restarting `npm run dev` resets it.
+**Pilot stations:** 3, as in the seed data: Manggarai, Sudirman, and Tebet. `docs/SPEC.md` §3 still names 5; SPEC lets the team change the list, and the seed data is the source.
 
-**Rate limit caveat:** the in-memory limiter counts per server instance. On Vercel, each instance keeps its own count and starts from zero after a cold start, so the limit is best-effort until a database-backed limiter exists.
+**Stub mode** (`CHATBOT_MODE` unset or `stub`) returns canned demo answers and needs no keys. It only knows `stationId: "station-manggarai"`; any other `stationId`, including real database ids, gets the no-data fallback, and a request without `stationId` gets the station-picker fallback. `fake` and `live` return `fallback_ai_unavailable` until they are built. The limit is 20 requests per hour per client, kept in memory, so restarting `npm run dev` resets it.
+
+**Rate limit caveat:** the route still counts in memory per server instance. On Vercel, each instance keeps its own count and starts from zero after a cold start, so the limit is best-effort until the route switches to Backend's database-backed `consumeRateLimit()` with the orchestrator. The key comes from Backend's `chatRateLimitKey()` (an HMAC of the IP with `IP_HASH_SALT`), so production must set `IP_HASH_SALT`; without it every chat request returns 500.
