@@ -64,7 +64,7 @@ export interface ChatResponse {
   retryAfterSec?: number;           // only when rate limited
 }
 ```
-HTTP: POST /api/chat. 200 for answered and all fallbacks. 400 invalid body or unknown quickMessageId (outcome "rejected"). 429 rate limited (outcome "rejected", Retry-After header). 500 only for unexpected bugs (generic message, no stack trace).
+HTTP: POST /api/chat. 200 for answered and all fallbacks. 400 invalid body or unknown quickMessageId (outcome "rejected"). 429 rate limited (outcome "rejected", Retry-After header). 500 only for unexpected bugs (outcome "fallback_ai_unavailable", generic message, no stack trace).
 
 ### 3.2 provider.ts (what Backend implements)
 ```ts
@@ -123,12 +123,13 @@ Fixed id to text map (Indonesian), plus allowed tools per id. The server ignores
 ## 7. Tools (names and behavior)
 All tool results are JSON, include only what the answer needs, and are small (fast and cheap). Tools never expose coordinates to the model.
 
-1. get_user_location (no model arguments). The server supplies lat/lng or a manual stationId.
-   - Manual stationId: { detected: true, source: "manual", station: {id,name}, needs_confirmation: false }.
-   - GPS: nearest pilot station by haversine from listStations(). If farther than STATION_DETECTION_RADIUS_M: { detected: false, reason: "outside_pilot_area" }. If between STATION_CONFIRMATION_RADIUS_M and the detection radius: needs_confirmation = true.
-   - No GPS and no stationId: { detected: false, reason: "no_location" }.
+1. get_user_location (no model arguments). The server supplies lat/lng or a manual stationId and resolves them with resolveLocation (geo.ts):
+   1. stationId known: that station is used (source "manual", needs_confirmation false), even if GPS disagrees. If valid GPS is also present and within STATION_DETECTION_RADIUS_M of that station, distances use the user's position (exact); otherwise they are measured from the station center (approximate).
+   2. stationId has a valid format but is not a pilot station: needsStationSelection = true, no model call.
+   3. No stationId, valid GPS: nearest pilot station within the radius (source "gps"). Between STATION_CONFIRMATION_RADIUS_M and the radius: needs_confirmation = true. Farther: outside_pilot_area.
+   4. Neither: no_location.
 2. get_nearest_facility { station_id, type: "water" | "charging" | "any", limit 1 to 6 }
-   - Returns facilities sorted by distance: { facility_id, name, type, platform, location_detail, level, distance_m, walk_time_min } and distance_basis: "user_position" (GPS) or "station_center" (manual station; distances are approximate).
+   - Returns facilities sorted by distance: { facility_id, name, type, platform, location_detail, level, distance_m, walk_time_min } and distance_basis from resolveLocation (tool 1): "user_position" (exact) or "station_center" (approximate).
    - walk_time_min = max(1, ceil(distance_m / (WALKING_SPEED_MPS x 60))).
 3. get_facility_status { facility_ids (max 6) }
    - Returns per facility: { facility_id, status, last_reported_at, minutes_ago, active_report_count }, plus a precomputed summary { total, available, empty, broken, under_maintenance, unknown } so the model never counts.
@@ -165,6 +166,7 @@ Fallback strings live in prompts.ts as constants (not model output):
 - AI unavailable: "Asisten sedang tidak tersedia. Lihat peta untuk fasilitas terdekat."
 - No data: "Aku belum menemukan data fasilitas untuk pertanyaan ini. Coba pilih stasiun lain atau lihat peta."
 - Outside pilot area: "Kamu sepertinya tidak berada di stasiun pilot FindToFill. Pilih stasiun secara manual untuk melanjutkan."
+- No location (no GPS and no station): "Lokasimu belum terdeteksi. Pilih stasiun secara manual untuk melanjutkan."
 - Rejected: "Pertanyaan tidak dikenali."
 - Rate limited: "Terlalu banyak permintaan. Coba lagi nanti."
 
