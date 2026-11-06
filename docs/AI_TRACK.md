@@ -121,13 +121,16 @@ Fixed id to text map (Indonesian), plus allowed tools per id. The server ignores
 | review_summary | Rangkum ulasan air di stasiun ini | get_user_location, search_reviews |
 
 ## 7. Tools (names and behavior)
-All tool results are JSON, include only what the answer needs, and are small (fast and cheap). Tools never expose coordinates to the model.
+All tool results are JSON, include only what the answer needs, and are small (fast and cheap). Tools never expose coordinates to the model: tool results never contain coordinates, not even the station center.
 
 1. get_user_location (no model arguments). The server supplies lat/lng or a manual stationId and resolves them with resolveLocation (geo.ts):
    1. stationId known: that station is used (source "manual", needs_confirmation false), even if GPS disagrees. If valid GPS is also present and within STATION_DETECTION_RADIUS_M of that station, distances use the user's position (exact); otherwise they are measured from the station center (approximate).
    2. stationId has a valid format but is not a pilot station: needsStationSelection = true, no model call.
    3. No stationId, valid GPS: nearest pilot station within the radius (source "gps"). Between STATION_CONFIRMATION_RADIUS_M and the radius: needs_confirmation = true. Farther: outside_pilot_area.
    4. Neither: no_location.
+   - The nearest station is found by haversine over provider.listStations() (pilot stations only).
+   - Detected result: { detected: true, source: "manual" | "gps", station: { id, name }, needs_confirmation: boolean, distance_basis: "user_position" | "station_center" }.
+   - Not detected result: { detected: false, reason: "outside_pilot_area" | "no_location" | "unknown_station" }. unknown_station is internal: the orchestrator then returns needsStationSelection without a model call.
 2. get_nearest_facility { station_id, type: "water" | "charging" | "any", limit 1 to 6 }
    - Returns facilities sorted by distance: { facility_id, name, type, platform, location_detail, level, distance_m, walk_time_min } and distance_basis from resolveLocation (tool 1): "user_position" (exact) or "station_center" (approximate).
    - walk_time_min = max(1, ceil(distance_m / (WALKING_SPEED_MPS x 60))).
