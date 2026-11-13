@@ -1,6 +1,6 @@
 # FindToFill Test Report
 
-FindToFill passed 275 of 275 automated tests (Jest) in about 17 seconds. Tests are grouped per build for integration testing, then run across the whole application (system testing) and repeated to confirm that existing capabilities still work (regression testing). Manual testing in the browser has not been run yet.
+FindToFill passed 275 of 275 automated tests (Jest). Tests are grouped per build for integration testing, then run across the whole application (system testing) and repeated to confirm that existing capabilities still work (regression testing). Manual testing in the browser has not been run yet.
 
 ## 1. Automated Test Results
 
@@ -12,7 +12,6 @@ FindToFill passed 275 of 275 automated tests (Jest) in about 17 seconds. Tests a
 | Test files | 30 |
 | Tests passed | 275 |
 | Tests failed / skipped | 0 / 0 |
-| Duration | about 17 seconds (full suite, with coverage) |
 | Builds passed | 6 of 6 |
 | Regression (Builds 1 to 5 after Build 6) | 226 of 226 passed |
 | Lint and type check | 0 errors |
@@ -140,7 +139,7 @@ Screenshot of the `npm test` result run by the team on another computer:
 
 ![npm test result: 35 suites and 303 tests passed](screenshots/npm-test-35-suite.png)
 
-*Figure 4.1. `npm test` result: 35 suites and 303 tests passed (9.7 seconds).*
+*Figure 4.1. `npm test` result: 35 suites and 303 tests passed.*
 
 > Note: the numbers in this screenshot (35 suites, 303 tests) are higher than the run made for this document (30 suites, 275 tests), probably because a different version of the code was tested (for example extra tests from another branch). The figures in the tables above come from this repo at the time of testing.
 
