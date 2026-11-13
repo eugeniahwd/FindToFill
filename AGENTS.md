@@ -53,3 +53,9 @@ src/app (pages, api), src/components, src/lib (supabase, groq, gemini, geo, rate
 
 ## Out of scope (do not build)
 Native app, free-text chat input, push notifications, integration with KAI systems, stations outside the pilot, QR scanning, points or levels, water quality lab data, voice notes, technician dispatch, batch moderation, an approve queue.
+
+## Parallel tracks (3 people)
+- AI track owns: src/lib/chatbot/**, src/app/api/chat/**, tests/chatbot/**, docs/eval/**, scripts/eval-chatbot.ts. Spec: docs/AI_TRACK.md (it wins over docs/AI_CHATBOT.md on conflicts).
+- Backend owns supabase/**, src/lib/supabase/**, and all other API routes. Frontend owns src/components/** and pages.
+- Never edit another track's folders. Cross-track changes go through a tiny PR and a note to the owner.
+- The chatbot module must never import Supabase; it uses the ChatbotDataProvider interface only.
