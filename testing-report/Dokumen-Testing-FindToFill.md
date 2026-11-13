@@ -12,7 +12,6 @@ FindToFill passed 275 of 275 automated tests (Jest) in about 17 seconds. Tests a
 | Test files | 30 |
 | Tests passed | 275 |
 | Tests failed / skipped | 0 / 0 |
-| Duration | about 17 seconds (full suite, with coverage) |
 | Builds passed | 6 of 6 |
 | Regression (Builds 1 to 5 after Build 6) | 226 of 226 passed |
 | Lint and type check | 0 errors |
