@@ -11,7 +11,8 @@
     "test:watch": "jest --watch",
     "typecheck": "tsc --noEmit",
     "db:seed": "ts-node -P scripts/tsconfig.json scripts/seed.ts",
-    "map:krl-lines": "ts-node -P scripts/tsconfig.json scripts/fetch-krl-lines.ts"
+    "map:krl-lines": "ts-node -P scripts/tsconfig.json scripts/fetch-krl-lines.ts",
+    "eval:chatbot": "ts-node -P scripts/tsconfig.json scripts/eval-chatbot.ts"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
