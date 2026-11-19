@@ -24,6 +24,7 @@ export const REVIEW_SNIPPET_MAX_CHARS = 300;
 export const REVIEW_LIMIT = 5;
 export const REPORT_WINDOW_DAYS = 7;
 export const TIMEZONE = 'Asia/Jakarta';
+export const NEXT_TRAINS_PER_DIRECTION = 2;
 
 /** Official KAI Contact number. Stays null until the team verifies it; never guess it. */
 export const KAI_CONTACT: string | null = null;
