@@ -102,6 +102,11 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 | `PUT`, `DELETE /api/me/favorites/:stationId` | Favorite or unfavorite a station (both safe to repeat) |
 | `GET /api/me/stamps` | The signed-in user's stamps with each facility's station (Stamp Map) |
 | `PATCH /api/admin/facilities/:id`, `PATCH /api/admin/stations/:id` | Admin edits (checked in the API and by RLS) |
+| `GET /api/admin/reports?stationId=&status=&limit=` | Admin: recent reports (removed included) with signed photo thumbnails, facility, station, reporter name |
+| `GET /api/admin/reviews?stationId=&limit=` | Admin: recent reviews (removed included), never the embedding |
+| `DELETE /api/admin/reports/:id`, `DELETE /api/admin/reviews/:id` | Admin **Remove** = soft delete (`removed_at`, `removed_by`); safe to repeat. Removed reports stop counting for the facility status; removed reviews leave public lists and the chatbot search. No restore (SPEC 4.7) |
+| `POST /api/admin/stations`, `POST /api/admin/facilities` | Admin adds a station or facility (new rows are not demo data) |
+| `GET`, `POST /api/admin/stations/:id/schedules`, `DELETE /api/admin/schedules/:id` | Admin timetable: list (optional `dayType`), add one departure `{ line, direction, dayType, departureTime: "HH:MM" }`, delete one. Bulk changes: `schedules.csv` + `npm run db:seed`. Layout image upload is on hold |
 | `src/lib/rate-limit.ts` | Sliding-window limits stored in `rate_limit_events` (reports now, chat later) |
 | `src/lib/data/` | Server data access (`stations.ts`, `reviews.ts`, signed photo URLs in `photos.ts`), reusable by the chatbot tools |
 | `src/lib/gemini/embeddings.ts` | `embedText(text, 'document' \| 'query')`: 768-d unit vector or `null` (never throws). Also for the `search_reviews` tool |

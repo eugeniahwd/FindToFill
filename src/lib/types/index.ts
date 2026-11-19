@@ -74,6 +74,37 @@ export interface Review {
   removedBy?: string | null;
 }
 
+/** A report as admins see it: removed ones included, with facility, station, and reporter name. */
+export interface ModerationReport extends Report {
+  facilityName: string;
+  stationId: string;
+  stationName: string;
+}
+
+/** A review as admins see it: removed ones included, with facility, station, and reviewer name. */
+export interface ModerationReview extends Review {
+  facilityName: string;
+  stationId: string;
+  stationName: string;
+}
+
+/** One train departure (demo data until the team adds field data). Time is WIB, HH:MM. */
+export interface Schedule {
+  id: string;
+  stationId: string;
+  line: string;
+  direction: string;
+  dayType: 'weekday' | 'weekend';
+  departureTime: string;
+}
+
+/** What a Remove (soft delete) changed. */
+export interface RemovalResult {
+  id: string;
+  removedAt: string;
+  removedBy: string;
+}
+
 export interface Favorite {
   userId: string;
   stationId: string;

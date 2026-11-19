@@ -1,0 +1,21 @@
+import { NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/auth/session';
+import { listModerationReviews } from '@/lib/data/moderation';
+import { reviewModerationQuerySchema } from '@/lib/api/moderationSchemas';
+import { queryParams } from '@/lib/api/validation';
+import { handleRouteError } from '@/lib/api/errors';
+
+export const dynamic = 'force-dynamic';
+
+/** Admin: recent reviews (removed included), newest first. Query: stationId?, limit? (max 100). */
+export async function GET(request: Request) {
+  try {
+    const filter = reviewModerationQuerySchema.parse(queryParams(request));
+    const db = await createSupabaseServerClient();
+    await requireAdmin(db);
+    return NextResponse.json({ reviews: await listModerationReviews(db, filter) });
+  } catch (err) {
+    return handleRouteError(err);
+  }
+}

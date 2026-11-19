@@ -1,8 +1,10 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, TableRow } from '@/lib/supabase/database.types';
+import type { Schedule } from '@/lib/types';
+import type { ScheduleCreateInput } from '@/lib/api/adminSchemas';
 import { APP_CONFIG } from '@/lib/config';
-import { fromDatabaseError } from '@/lib/api/errors';
+import { ApiError, fromDatabaseError } from '@/lib/api/errors';
 
 // Next departures for the get_next_train chatbot tool (docs/AI_CHATBOT.md, tool 4).
 // Times are station-local (WIB). No cron and no stored "current" state: computed per request.
@@ -103,6 +105,57 @@ export function upcomingDepartures(
 export function refillTimeCheck(walkTimeMin: number, minutesUntil: number): TimeCheck {
   const neededMinutes = 2 * walkTimeMin + APP_CONFIG.REFILL_MINUTES;
   return { neededMinutes, enoughTime: neededMinutes <= minutesUntil, slackMinutes: minutesUntil - neededMinutes };
+}
+
+// ---------------------------------------------------------------------------
+// Admin timetable editing (Stations tab): one departure at a time. Bulk changes use
+// supabase/seed/schedules.csv + npm run db:seed. RLS allows writes for admins only.
+// ---------------------------------------------------------------------------
+
+function toSchedule(row: TableRow<'schedules'>): Schedule {
+  return {
+    id: row.id,
+    stationId: row.station_id,
+    line: row.line,
+    direction: row.direction,
+    dayType: row.day_type,
+    departureTime: row.departure_time.slice(0, 5),
+  };
+}
+
+/** A station's departures ordered by day type, line, direction, time. */
+export async function listStationSchedules(db: Db, stationId: string, dayType?: DayType): Promise<Schedule[]> {
+  let query = db.from('schedules').select('*').eq('station_id', stationId);
+  if (dayType) query = query.eq('day_type', dayType);
+  const { data, error } = await query
+    .order('day_type')
+    .order('line')
+    .order('direction')
+    .order('departure_time');
+  if (error) throw fromDatabaseError(error);
+  return data.map(toSchedule);
+}
+
+export async function addSchedule(db: Db, stationId: string, input: ScheduleCreateInput): Promise<Schedule> {
+  const { data, error } = await db
+    .from('schedules')
+    .insert({
+      station_id: stationId,
+      line: input.line,
+      direction: input.direction,
+      day_type: input.dayType,
+      departure_time: input.departureTime,
+    })
+    .select('*')
+    .single();
+  if (error) throw fromDatabaseError(error);
+  return toSchedule(data);
+}
+
+export async function deleteSchedule(db: Db, scheduleId: string): Promise<void> {
+  const { data, error } = await db.from('schedules').delete().eq('id', scheduleId).select('id');
+  if (error) throw fromDatabaseError(error);
+  if (data.length === 0) throw new ApiError(404, 'NOT_FOUND', 'Departure not found.');
 }
 
 /**

@@ -37,6 +37,10 @@ export const APP_CONFIG = {
   // SPEC default 3: "enough time" = 2 x one-way walk + 1 minute to fill <= minutes until the next train.
   REFILL_MINUTES: 1,
 
+  // Admin moderation lists (newest first).
+  MODERATION_LIST_LIMIT: 50,
+  MODERATION_LIST_MAX: 100,
+
   // Rate Limits
   MAX_REPORTS_PER_HOUR: 5,
   // Not in SPEC: protects the free Gemini embedding quota from repeated edits.
