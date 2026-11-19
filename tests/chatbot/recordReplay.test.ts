@@ -54,6 +54,18 @@ describe('RecordReplayLLMClient', () => {
     expect(inner.calls).toBe(1);
   });
 
+  it('reuses a saved response in record mode instead of calling the model again', async () => {
+    const first = new CountingClient({ text: 'first' });
+    const second = new CountingClient({ text: 'second' });
+
+    await new RecordReplayLLMClient('record', directory, first).generate(REQUEST);
+    const again = await new RecordReplayLLMClient('record', directory, second).generate(REQUEST);
+
+    expect(again).toEqual({ text: 'first' });
+    expect(second.calls).toBe(0);
+    expect(readdirSync(directory)).toHaveLength(1);
+  });
+
   it('fails as unavailable when a recording is missing', async () => {
     const result = new RecordReplayLLMClient('replay', directory).generate(REQUEST);
     await expect(result).rejects.toMatchObject({ kind: 'unavailable' });
