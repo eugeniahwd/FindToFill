@@ -85,7 +85,11 @@ export default function AdminPage() {
       {activeTab === 'reports' && <ReportsModeration stations={stations} />}
       {activeTab === 'reviews' && <ReviewsModeration stations={stations} />}
       {activeTab === 'stations' && stations.length > 0 && (
-        <StationsManager stations={stations} onStationCreated={(s) => setStations((prev) => [...prev, s])} />
+        <StationsManager
+          stations={stations}
+          onStationCreated={(s) => setStations((prev) => [...prev, s])}
+          onStationUpdated={(s) => setStations((prev) => prev.map((p) => (p.id === s.id ? s : p)))}
+        />
       )}
     </div>
   );

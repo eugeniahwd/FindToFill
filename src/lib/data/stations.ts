@@ -42,6 +42,21 @@ export async function listStationFacilities(db: Db, stationId: string): Promise<
   return attachStatus(db, data.map(toFacility));
 }
 
+/**
+ * Admin view: every facility of a station, inactive ones included, so an admin can switch one
+ * back on. Public pages and the chatbot use listStationFacilities() (active only).
+ */
+export async function listAllStationFacilities(db: Db, stationId: string): Promise<FacilityWithStatus[]> {
+  const { data, error } = await db
+    .from('facilities')
+    .select('*')
+    .eq('station_id', stationId)
+    .order('is_active', { ascending: false })
+    .order('name');
+  if (error) throw fromDatabaseError(error);
+  return attachStatus(db, data.map(toFacility));
+}
+
 export async function getFacility(db: Db, facilityId: string): Promise<FacilityWithStatus | null> {
   const { data, error } = await db
     .from('facilities')

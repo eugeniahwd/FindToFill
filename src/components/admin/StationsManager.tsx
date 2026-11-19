@@ -3,29 +3,39 @@
 import React, { useState } from 'react';
 import { Edit3, Plus } from 'lucide-react';
 import type { FacilityWithStatus, Station } from '@/lib/types';
-import { stationService } from '@/lib/services/stationService';
+import { adminService } from '@/lib/services/adminService';
 import { StatusBadge } from '../common/StatusBadge';
 import { AdminChips } from './FilterChips';
 import { ListStates } from './ListStates';
 import { ScheduleManager } from './ScheduleManager';
-import { FacilityCreateSheet, FacilityEditSheet, StationCreateSheet } from './StationForms';
+import { FacilityCreateSheet, FacilityEditSheet, StationCreateSheet, StationEditSheet } from './StationForms';
 import { useAdminList } from './useAdminList';
 
 const addButtonClass =
   'min-touch-target px-3 py-1.5 rounded-xl bg-[#00628C] text-white text-xs font-bold flex items-center gap-1 hover:bg-[#004e70]';
+const editButtonClass =
+  'min-touch-target p-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center justify-center shrink-0';
 
 /**
- * Stations tab (SPEC 4.7): add stations and facilities, edit facilities, manage the timetable.
- * Layout image upload is on hold (team decision), so layouts are not edited here yet.
+ * Stations tab (SPEC 4.7): add and edit stations, add and edit facilities (including switching
+ * one off), manage the timetable. Layout image upload is on hold (team decision).
  */
-export function StationsManager({ stations, onStationCreated }: { stations: Station[]; onStationCreated: (s: Station) => void }) {
+export function StationsManager({
+  stations,
+  onStationCreated,
+  onStationUpdated,
+}: {
+  stations: Station[];
+  onStationCreated: (s: Station) => void;
+  onStationUpdated: (s: Station) => void;
+}) {
   const [stationId, setStationId] = useState<string>(stations[0]?.id ?? '');
-  const [sheet, setSheet] = useState<'station' | 'facility' | null>(null);
+  const [sheet, setSheet] = useState<'station' | 'edit-station' | 'facility' | null>(null);
   const [editing, setEditing] = useState<FacilityWithStatus | null>(null);
   const station = stations.find((s) => s.id === stationId) ?? stations[0];
 
-  const { items: facilities, setItems, state, reload } = useAdminList(
-    () => (station ? stationService.getStationFacilities(station.id) : Promise.resolve([])),
+  const { items: facilities, state, reload } = useAdminList(
+    () => (station ? adminService.getStationFacilities(station.id) : Promise.resolve([])),
     station?.id ?? '',
   );
 
@@ -47,6 +57,18 @@ export function StationsManager({ stations, onStationCreated }: { stations: Stat
 
       {station && (
         <>
+          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-navy">Stasiun {station.name}</div>
+              <div className="text-[11px] text-slate-400 mt-1">
+                {station.lines.length > 0 ? station.lines.join(', ') : 'Belum ada jalur'} · {station.latitude}, {station.longitude}
+              </div>
+            </div>
+            <button type="button" onClick={() => setSheet('edit-station')} className={editButtonClass} aria-label={`Edit stasiun ${station.name}`}>
+              <Edit3 size={16} aria-hidden="true" />
+            </button>
+          </div>
+
           <section aria-labelledby="facility-heading" className="flex flex-col gap-2.5">
             <div className="flex items-center justify-between gap-2">
               <h2 id="facility-heading" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
@@ -57,25 +79,29 @@ export function StationsManager({ stations, onStationCreated }: { stations: Stat
                 <span>Tambah Fasilitas</span>
               </button>
             </div>
-            <ListStates state={state} isEmpty={facilities.length === 0} emptyText="Belum ada fasilitas aktif di stasiun ini." onRetry={reload}>
+            <ListStates state={state} isEmpty={facilities.length === 0} emptyText="Belum ada fasilitas di stasiun ini." onRetry={reload}>
               <ul className="flex flex-col gap-2.5">
                 {facilities.map((fac) => (
-                  <li key={fac.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between gap-3">
+                  <li
+                    key={fac.id}
+                    className={`p-4 rounded-2xl border shadow-xs flex items-center justify-between gap-3 ${
+                      fac.isActive ? 'bg-white border-slate-100' : 'bg-slate-50 border-dashed border-slate-300'
+                    }`}
+                  >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-navy truncate">{fac.name}</span>
-                        <StatusBadge status={fac.currentStatus} size="sm" />
+                        <span className={`text-xs font-bold truncate ${fac.isActive ? 'text-navy' : 'text-slate-500'}`}>{fac.name}</span>
+                        {fac.isActive ? (
+                          <StatusBadge status={fac.currentStatus} size="sm" />
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">Nonaktif</span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-400 mt-1 truncate">
                         {[fac.level, fac.platform, fac.locationDetail].filter(Boolean).join(' · ')}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(fac)}
-                      className="min-touch-target p-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center justify-center shrink-0"
-                      aria-label={`Edit ${fac.name}`}
-                    >
+                    <button type="button" onClick={() => setEditing(fac)} className={editButtonClass} aria-label={`Edit ${fac.name}`}>
                       <Edit3 size={16} aria-hidden="true" />
                     </button>
                   </li>
@@ -98,6 +124,16 @@ export function StationsManager({ stations, onStationCreated }: { stations: Stat
           }}
         />
       )}
+      {sheet === 'edit-station' && station && (
+        <StationEditSheet
+          station={station}
+          onClose={() => setSheet(null)}
+          onSaved={(updated) => {
+            onStationUpdated(updated);
+            setSheet(null);
+          }}
+        />
+      )}
       {sheet === 'facility' && station && (
         <FacilityCreateSheet
           station={station}
@@ -112,9 +148,10 @@ export function StationsManager({ stations, onStationCreated }: { stations: Stat
         <FacilityEditSheet
           facility={editing}
           onClose={() => setEditing(null)}
-          onSaved={(updated) => {
-            setItems((prev) => prev.map((f) => (f.id === updated.id ? { ...f, ...updated } : f)));
+          onSaved={() => {
+            // Reload so a switched-off facility moves to the end of the list with its label.
             setEditing(null);
+            reload();
           }}
         />
       )}

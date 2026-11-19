@@ -1,5 +1,6 @@
 import type {
   Facility,
+  FacilityWithStatus,
   ModerationReport,
   ModerationReview,
   RemovalResult,
@@ -76,6 +77,14 @@ export const adminService = {
   async createStation(input: NewStation): Promise<Station> {
     const { station } = await apiRequest<{ station: Station }>('/api/admin/stations', { method: 'POST', body: input });
     return station;
+  },
+
+  /** Every facility of a station, inactive ones included (listed last). */
+  async getStationFacilities(stationId: string): Promise<FacilityWithStatus[]> {
+    const { facilities } = await apiRequest<{ facilities: FacilityWithStatus[] }>(
+      `/api/admin/stations/${id(stationId)}/facilities`,
+    );
+    return facilities;
   },
 
   async createFacility(input: NewFacility): Promise<Facility> {

@@ -9,9 +9,10 @@ import { POST as createStation } from '@/app/api/admin/stations/route';
 import { POST as createFacility } from '@/app/api/admin/facilities/route';
 import { GET as listSchedules, POST as createSchedule } from '@/app/api/admin/stations/[id]/schedules/route';
 import { DELETE as deleteScheduleRoute } from '@/app/api/admin/schedules/[id]/route';
+import { GET as listAdminFacilities } from '@/app/api/admin/stations/[id]/facilities/route';
 import { requireAdmin } from '@/lib/auth/session';
 import { listModerationReports, listModerationReviews, removeReport, removeReview } from '@/lib/data/moderation';
-import { getStation } from '@/lib/data/stations';
+import { getStation, listAllStationFacilities } from '@/lib/data/stations';
 import { ApiError } from '@/lib/api/errors';
 import { fakeSupabase } from './helpers/fakeSupabase';
 
@@ -51,6 +52,7 @@ describe('admin-only access', () => {
     ['POST /api/admin/stations', () => createStation(send('POST', { name: 'X', latitude: 0, longitude: 0 }))],
     ['POST /api/admin/stations/:id/schedules', () => createSchedule(send('POST', { line: 'L', direction: 'D', dayType: 'weekday', departureTime: '05:00' }), ctx(STATION))],
     ['DELETE /api/admin/schedules/:id', () => deleteScheduleRoute(send('DELETE'), ctx(ID))],
+    ['GET /api/admin/stations/:id/facilities', () => listAdminFacilities(get('/api'), ctx(STATION))],
   ])('%s rejects commuters with 403 and writes nothing', async (_name, call) => {
     jest.mocked(requireAdmin).mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'Admin access only.'));
     expect((await call()).status).toBe(403);
@@ -141,6 +143,22 @@ describe('POST /api/admin/facilities', () => {
     expect((await createFacility(send('POST', { ...valid, type: 'toilet' }))).status).toBe(400);
     expect((await createFacility(send('POST', { ...valid, layoutX: 120 }))).status).toBe(400);
     expect(mockDb.calls.filter((c) => c.op === 'insert')).toHaveLength(0);
+  });
+});
+
+describe('GET /api/admin/stations/:id/facilities', () => {
+  it('returns every facility, inactive ones included', async () => {
+    const inactive = { id: ID, stationId: STATION, type: 'water' as const, name: 'Dispenser Lama', latitude: -6.2, longitude: 106.8, isActive: false,
+      currentStatus: 'unknown' as const, lastReportedAt: null, lastPhotoUrl: null, activeReportCount: 0 };
+    jest.mocked(listAllStationFacilities).mockResolvedValue([inactive]);
+    expect(await json(await listAdminFacilities(get('/api'), ctx(STATION)))).toEqual({ status: 200, body: { facilities: [inactive] } });
+  });
+
+  it('returns 404 for an unknown station and 400 for an id that is not a UUID', async () => {
+    jest.mocked(getStation).mockResolvedValue(null);
+    expect((await listAdminFacilities(get('/api'), ctx(STATION))).status).toBe(404);
+    expect((await listAdminFacilities(get('/api'), ctx('tebet'))).status).toBe(400);
+    expect(listAllStationFacilities).not.toHaveBeenCalled();
   });
 });
 
