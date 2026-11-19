@@ -1,9 +1,6 @@
 import { Report, ReportStatus } from '../types';
-import { MOCK_REPORTS } from '../mock/data';
 import { dataUrlToBlob } from '../reports/dataUrl';
 import { apiRequest } from './apiClient';
-
-const dynamicReports: Report[] = [...MOCK_REPORTS];
 
 export interface SubmitReportResult {
   report: Report;
@@ -40,54 +37,5 @@ export const reportService = {
     const { reports } = await apiRequest<{ reports: Report[] }>('/api/me/reports');
     return reports;
   },
-
-  // ---------------------------------------------------------------------------
-  // Still mock data until the admin moderation API (Sprint 6).
-  // ---------------------------------------------------------------------------
-
-  // TODO(backend): Replace with supabase.from('reports').select('*').eq('facility_id', facilityId).is('removed_at', null)
-  async getFacilityReports(facilityId: string): Promise<Report[]> {
-    await new Promise((r) => setTimeout(r, 150));
-    return dynamicReports
-      .filter((r) => r.facilityId === facilityId && !r.removedAt)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-  },
-
-  // TODO(backend): Replace with the admin moderation API (Sprint 6)
-  async getAllReports(): Promise<Report[]> {
-    await new Promise((r) => setTimeout(r, 200));
-    return [...dynamicReports].sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  },
-
-  // TODO(backend): Replace with the admin moderation API (Sprint 6)
-  async removeReport(reportId: string, adminId: string): Promise<void> {
-    await new Promise((r) => setTimeout(r, 250));
-    const index = dynamicReports.findIndex((r) => r.id === reportId);
-    if (index !== -1) {
-      dynamicReports[index] = {
-        ...dynamicReports[index],
-        removedAt: new Date().toISOString(),
-        removedBy: adminId,
-      };
-    }
-  },
-
-  // TODO(backend): Replace with the admin moderation API (Sprint 6)
-  async restoreReport(reportId: string): Promise<void> {
-    await new Promise((r) => setTimeout(r, 250));
-    const index = dynamicReports.findIndex((r) => r.id === reportId);
-    if (index !== -1) {
-      dynamicReports[index] = {
-        ...dynamicReports[index],
-        removedAt: null,
-        removedBy: null,
-      };
-    }
-  },
+  // Admin moderation lives in adminService.
 };
