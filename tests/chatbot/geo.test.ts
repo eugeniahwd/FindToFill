@@ -8,7 +8,12 @@ const MANGGARAI: StationRef = {
   latitude: -6.21017,
   longitude: 106.84994,
 };
-const TEBET: StationRef = { id: 'station-tebet', name: 'Tebet', latitude: -6.2264, longitude: 106.85844 };
+const TEBET: StationRef = {
+  id: 'station-tebet',
+  name: 'Tebet',
+  latitude: -6.2264,
+  longitude: 106.85844,
+};
 const PILOTS = [MANGGARAI, TEBET];
 
 describe('distanceMeters and walkMinutes', () => {
