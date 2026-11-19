@@ -42,7 +42,12 @@ const RECORDINGS = join(ROOT, 'docs', 'eval', 'recordings');
 const PASS_RATE = 18 / 20;
 const MAX_ATTEMPTS = 3;
 /** Problems that mean the message states something no tool returned. */
-const INVENTED: readonly AnswerProblem[] = ['ungrounded_number', 'unknown_facility_id', 'status_claim'];
+const INVENTED: readonly AnswerProblem[] = [
+  'ungrounded_number',
+  'unknown_facility_id',
+  'status_claim',
+  'time_verdict',
+];
 
 const CaseSchema = z
   .object({

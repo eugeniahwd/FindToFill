@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_c2dafe8c-9ec8-45d2-a18e-de48808bb078",
+      "name": "get_nearest_facility",
+      "args": {
+        "limit": 3,
+        "station_id": "station-tebet",
+        "type": "charging"
+      }
+    }
+  ]
+}

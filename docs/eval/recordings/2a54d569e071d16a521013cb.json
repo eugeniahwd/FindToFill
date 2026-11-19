@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_3e2cfc43-8f13-41ed-9e50-f861626096ef",
+      "name": "get_nearest_facility",
+      "args": {
+        "limit": 3,
+        "station_id": "station-tebet",
+        "type": "water"
+      }
+    }
+  ]
+}

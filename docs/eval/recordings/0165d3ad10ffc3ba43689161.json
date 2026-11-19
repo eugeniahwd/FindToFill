@@ -1,0 +1,15 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_1cf3abe7-b08a-4f89-9097-dfc426ccbb45",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-manggarai-water-p3",
+          "fac-manggarai-charging-lounge",
+          "fac-manggarai-water-exit-a"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_bc6724f3-641c-484e-b4fb-d236c893bc3a",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-tebet-charging-p1"
+        ]
+      }
+    }
+  ]
+}

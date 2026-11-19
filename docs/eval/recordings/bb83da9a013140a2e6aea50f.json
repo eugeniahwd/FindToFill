@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_6132c016-ce34-428a-be91-df2b1ee99480",
+      "name": "get_nearest_facility",
+      "args": {
+        "limit": 3,
+        "station_id": "station-sudirman",
+        "type": "charging"
+      }
+    }
+  ]
+}

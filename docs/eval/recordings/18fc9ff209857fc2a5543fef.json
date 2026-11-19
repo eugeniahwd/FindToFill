@@ -1,0 +1,11 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_217b3f68-cf1c-433e-9536-5904c7c18b40",
+      "name": "search_reviews",
+      "args": {
+        "station_id": "station-tebet"
+      }
+    }
+  ]
+}

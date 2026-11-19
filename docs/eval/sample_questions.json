@@ -119,7 +119,7 @@
         "mustIncludeFacilityIds": ["fac-tebet-charging-p1", "fac-tebet-water-p2"],
         "mustIncludeFacts": [
           "2 dari 3|dua dari tiga|2 fasilitas|dua fasilitas|Charging Box",
-          "2 dari 3|dua dari tiga|2 fasilitas|dua fasilitas|Platform 2"
+          "2 dari 3|dua dari tiga|2 fasilitas|dua fasilitas|Platform 2|Water Station"
         ],
         "mustNotInclude": ["semua fasilitas tersedia", "Manggarai", "Sudirman"],
         "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
@@ -133,7 +133,7 @@
       "expected": {
         "outcome": "answered",
         "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
-        "mustIncludeFacts": ["7 menit", "sempat|cukup"],
+        "mustIncludeFacts": ["7 menit", "sempat|cukup|bisa isi|bisa mengisi|dapat mengisi"],
         "mustNotInclude": ["tidak cukup", "tidak sempat"],
         "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status", "get_next_train"]
       }

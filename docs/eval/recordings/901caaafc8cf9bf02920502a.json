@@ -1,0 +1,12 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_076b8a7f-c23b-4bf3-9fcd-04349c2e5e74",
+      "name": "get_next_train",
+      "args": {
+        "station_id": "station-sudirman",
+        "walk_time_min": 1
+      }
+    }
+  ]
+}

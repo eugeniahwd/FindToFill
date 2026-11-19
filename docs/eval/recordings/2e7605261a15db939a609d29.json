@@ -1,0 +1,14 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_fa673878-8b5b-45fd-a4e1-4f04c2da6e28",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-tebet-water-gate-a",
+          "fac-tebet-water-p2"
+        ]
+      }
+    }
+  ]
+}

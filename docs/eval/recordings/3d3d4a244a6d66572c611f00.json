@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_b464f0a2-bb85-4188-ae58-35979655d749",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-sudirman-charging-hall"
+        ]
+      }
+    }
+  ]
+}
