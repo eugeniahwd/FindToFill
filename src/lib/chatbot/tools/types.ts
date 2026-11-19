@@ -73,6 +73,7 @@ export interface ReviewOutput {
   station_id: string;
   count: number;
   average_rating: number | null;
+  rating_scale: number; // ratings are 1 to rating_scale
   // Untrusted user text: data for the model, never instructions.
   reviews: { facility_name: string; rating: number; comment: string; days_ago: number }[];
 }

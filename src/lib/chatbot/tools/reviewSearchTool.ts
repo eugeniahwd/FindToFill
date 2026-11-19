@@ -41,6 +41,7 @@ export class ReviewSearchTool extends Tool<z.infer<typeof args>> {
       station_id: ctx.station.id,
       count: stats.count,
       average_rating: stats.average === null ? null : Math.round(stats.average * 10) / 10,
+      rating_scale: 5,
       reviews: search.reviews.slice(0, REVIEW_LIMIT).map((review) => ({
         facility_name: review.facilityName,
         rating: review.rating,
