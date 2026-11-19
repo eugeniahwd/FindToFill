@@ -1,5 +1,5 @@
 {
-  "about": "FindToFill chatbot eval (docs/AI_TRACK.md section 15). Demo data only (src/lib/chatbot/data/fakeData.ts). Default time: Wed 2026-11-18 08:03 WIB. A fact matches when any of its '|' alternatives appears in the message (case-insensitive).",
+  "about": "FindToFill chatbot eval (docs/AI_TRACK.md section 15). Demo data only (src/lib/chatbot/data/fakeData.ts). Default time: Wed 2026-11-18 08:03 WIB. A fact matches when any of its '|' alternatives appears in the message (case-insensitive, non-breaking spaces and Unicode dashes normalized). Facts test what a correct answer must say, not the template wording: for facility_working, the count or the names of the available facilities.",
   "defaultNow": "2026-11-18T01:03:00.000Z",
   "cases": [
     {
@@ -88,7 +88,10 @@
       "expected": {
         "outcome": "answered",
         "mustIncludeFacilityIds": ["fac-manggarai-water-p3", "fac-manggarai-charging-lounge"],
-        "mustIncludeFacts": ["2 dari 6|dua dari enam|2 fasilitas|dua fasilitas"],
+        "mustIncludeFacts": [
+          "2 dari 6|dua dari enam|2 fasilitas|dua fasilitas|Charging Lounge",
+          "2 dari 6|dua dari enam|2 fasilitas|dua fasilitas|Platform 3"
+        ],
         "mustNotInclude": ["semua fasilitas tersedia", "Sudirman", "Tebet"],
         "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
       }
@@ -101,7 +104,7 @@
       "expected": {
         "outcome": "answered",
         "mustIncludeFacilityIds": ["fac-sudirman-water-kendal"],
-        "mustIncludeFacts": ["1 dari 3|satu dari tiga|1 fasilitas|satu fasilitas"],
+        "mustIncludeFacts": ["1 dari 3|satu dari tiga|1 fasilitas|satu fasilitas|Kendal"],
         "mustNotInclude": ["semua fasilitas tersedia", "Manggarai", "Tebet"],
         "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
       }
@@ -114,7 +117,10 @@
       "expected": {
         "outcome": "answered",
         "mustIncludeFacilityIds": ["fac-tebet-charging-p1", "fac-tebet-water-p2"],
-        "mustIncludeFacts": ["2 dari 3|dua dari tiga|2 fasilitas|dua fasilitas"],
+        "mustIncludeFacts": [
+          "2 dari 3|dua dari tiga|2 fasilitas|dua fasilitas|Charging Box",
+          "2 dari 3|dua dari tiga|2 fasilitas|dua fasilitas|Platform 2"
+        ],
         "mustNotInclude": ["semua fasilitas tersedia", "Manggarai", "Sudirman"],
         "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
       }

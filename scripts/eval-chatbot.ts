@@ -32,6 +32,7 @@ import { InMemoryChatLogger } from '../src/lib/chatbot/logger';
 import { handleChat } from '../src/lib/chatbot/orchestrator';
 import { InMemoryRateLimiter } from '../src/lib/chatbot/rateLimit';
 import type { Evidence } from '../src/lib/chatbot/tools/types';
+import { composeAnswer } from '../src/lib/chatbot/deterministic';
 import { checkAnswer, type AnswerProblem } from '../src/lib/chatbot/validation';
 
 const ROOT = join(__dirname, '..');
@@ -85,6 +86,8 @@ interface CaseResult {
   pass: boolean;
   reasons: string[];
   invented: number;
+  /** model: the model's own message passed the checks. template: the fixed-template answer. */
+  source: 'model' | 'template' | 'fallback';
   latencyMs: number;
   response: ChatResponse;
 }
@@ -182,9 +185,17 @@ async function runCase(testCase: EvalCase, defaultNow: string, model: () => LLMC
   return { response, evidence, latencyMs, quotaHit };
 }
 
+/** gpt-oss writes "2 menit" and "rata‑rata": compare with plain spaces and hyphens. */
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[   ]/g, ' ')
+    .replace(/[‐-―]/g, '-');
+}
+
 function includesAny(message: string, fact: string): boolean {
-  const text = message.toLowerCase();
-  return fact.split('|').some((alternative) => text.includes(alternative.toLowerCase()));
+  const text = normalize(message);
+  return fact.split('|').some((alternative) => text.includes(normalize(alternative)));
 }
 
 function score(
@@ -205,9 +216,7 @@ function score(
     if (!includesAny(response.message, fact)) reasons.push(`fact "${fact}" missing`);
   }
   for (const banned of expected.mustNotInclude) {
-    if (response.message.toLowerCase().includes(banned.toLowerCase())) {
-      reasons.push(`says "${banned}"`);
-    }
+    if (normalize(response.message).includes(normalize(banned))) reasons.push(`says "${banned}"`);
   }
   const tools: readonly string[] = evidence?.toolsCalled ?? [];
   for (const tool of expected.toolsMustInclude) {
@@ -228,6 +237,21 @@ function score(
     if (unknownCards.length > 0) reasons.push(`card not from a tool: ${unknownCards.join(', ')}`);
   }
   return { reasons, invented };
+}
+
+/**
+ * The fake policy model writes the template text on purpose, so in fake mode "template" also
+ * covers its answers; in live mode "template" means the model's message was not used.
+ */
+function answerSource(
+  testCase: EvalCase,
+  response: ChatResponse,
+  evidence: Evidence | undefined,
+): CaseResult['source'] {
+  if (response.outcome !== 'answered' || !evidence || !response.detectedStation) return 'fallback';
+  const station = response.detectedStation.name;
+  const template = composeAnswer(testCase.quickMessageId, evidence.outputs, station).message;
+  return template === response.message ? 'template' : 'model';
 }
 
 function percentile(values: number[], p: number): number {
@@ -276,6 +300,7 @@ async function main(): Promise<void> {
       reasons,
       invented,
       latencyMs: run.latencyMs,
+      source: answerSource(testCase, run.response, run.evidence),
       response: run.response,
     };
     results.push(result);
@@ -284,6 +309,7 @@ async function main(): Promise<void> {
       result.pass ? 'PASS' : 'FAIL',
       testCase.id.padEnd(26),
       run.response.outcome.padEnd(24),
+      result.source.padEnd(8),
       `${Math.round(result.latencyMs)} ms`.padStart(8),
     ];
     const line = columns.join(' ');
@@ -299,7 +325,10 @@ async function main(): Promise<void> {
   const needed = Math.ceil(PASS_RATE * results.length);
   const met = passed >= needed && invented === 0;
   console.log('');
+  const byModel = results.filter((result) => result.source === 'model').length;
+  const answered = results.filter((result) => result.source !== 'fallback').length;
   console.log(`Total: ${passed}/${results.length} passed. Invented facts: ${invented}.`);
+  console.log(`Answers written by the model (passed every check): ${byModel}/${answered}.`);
   console.log(`Latency: p50 ${p50} ms, p90 ${p90} ms.`);
   console.log(
     `Target (at least ${needed} of ${results.length} and 0 invented facts): ${met ? 'MET' : 'NOT MET'}`,
