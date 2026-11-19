@@ -4,6 +4,7 @@
  * The five tools by name, and the declarations the model may see for one quick message.
  */
 
+import type { ToolDeclaration } from '../llm/types';
 import type { ChatbotToolName } from '../quickMessages';
 import { FacilityStatusTool } from './facilityStatusTool';
 import { LocationTool } from './locationTool';
@@ -11,12 +12,6 @@ import { NearestFacilityTool } from './nearestFacilityTool';
 import { ReviewSearchTool } from './reviewSearchTool';
 import { TrainScheduleTool } from './trainScheduleTool';
 import type { Tool } from './types';
-
-export interface ToolDeclaration {
-  name: ChatbotToolName;
-  description: string;
-  parameters: Record<string, unknown>;
-}
 
 const TOOLS: Readonly<Record<ChatbotToolName, Tool<unknown>>> = {
   get_user_location: new LocationTool(),
