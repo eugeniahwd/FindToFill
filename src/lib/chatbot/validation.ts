@@ -63,7 +63,9 @@ export type AnswerProblem =
   | 'too_many_sentences'
   | 'unknown_facility_id'
   | 'ungrounded_number'
-  | 'status_claim';
+  | 'status_claim'
+  /** time_to_refill: no answer to "is there time?", or the opposite of what the tool computed. */
+  | 'time_verdict';
 
 export interface AnswerCheck {
   ok: boolean;
@@ -119,6 +121,9 @@ export function checkAnswer(
   const allowed = groundedNumbers(evidence.results);
   if (messageNumbers(message).some((n) => !allowed.has(n))) problems.add('ungrounded_number');
   if (claimsWorking(message, evidence)) problems.add('status_claim');
+  if (quickMessageId === 'time_to_refill' && wrongTimeVerdict(message, evidence)) {
+    problems.add('time_verdict');
+  }
 
   return {
     ok: problems.size === 0,
@@ -186,6 +191,39 @@ function claimsWorking(message: string, evidence: Evidence): boolean {
     }
     return false;
   });
+}
+
+// "masih sempat", "cukup waktu", "bisa mengisi"; negated ("tidak sempat") they mean the opposite.
+const FEASIBLE_PATTERN =
+  /\b(sempat|keburu|cukup waktu|waktu(?:nya)? (?:masih )?cukup|(?:bisa|dapat) (?:isi|mengisi))\b/gi;
+const SHORT_PATTERN =
+  /\b((?:tidak|tak|belum) cukup|kurang waktu|waktu(?:nya)? kurang|terlalu mepet)\b/i;
+
+/**
+ * A time_to_refill message must answer the question the way get_next_train did: say the
+ * schedule is missing when it is, and give the same yes or no as time_check.enough_time.
+ * Live gpt-oss answers did both wrong ("Anda dapat mengisi air" with enough_time false).
+ */
+function wrongTimeVerdict(message: string, evidence: Evidence): boolean {
+  const trains = evidence.outputs.trains;
+  if (!trains) return false; // no available water, so no train check was needed
+  const { feasible, short } = timeVerdict(message);
+  if (!trains.data_available) return !/\bjadwal\b/i.test(message) || feasible;
+  if (trains.departures.length === 0) return feasible;
+  const check = trains.time_check;
+  if (!check) return false;
+  return check.enough_time ? !feasible || short : !short || feasible;
+}
+
+function timeVerdict(message: string): { feasible: boolean; short: boolean } {
+  let feasible = false;
+  let short = SHORT_PATTERN.test(message);
+  for (const match of message.matchAll(FEASIBLE_PATTERN)) {
+    const before = message.slice(0, match.index).toLowerCase().match(WORD_PATTERN) ?? [];
+    if (before.slice(-3).some((word) => NEGATIONS.has(word))) short = true;
+    else feasible = true;
+  }
+  return { feasible, short };
 }
 
 /** A working phrase in the clause that is not negated by one of the 6 words before it. */

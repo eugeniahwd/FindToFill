@@ -344,3 +344,62 @@ describe('checkAnswer', () => {
     });
   });
 });
+
+describe('checkAnswer: the time_to_refill verdict', () => {
+  async function verdictProblem(
+    message: string,
+    options: { dataset?: DemoDataset; now?: Date } = {},
+  ): Promise<boolean> {
+    const { evidence } = await collect('time_to_refill', DEMO_STATIONS.manggarai, options);
+    const facilityIds = ['fac-manggarai-water-p3'];
+    return checkAnswer({ message, facilityIds }, 'time_to_refill', evidence).problems.includes(
+      'time_verdict',
+    );
+  }
+
+  // 08:03: the next train leaves in 7 minutes and 3 are needed, so there is time.
+  it.each([
+    ['Kamu masih sempat isi air, kereta berikutnya 7 menit lagi.', false],
+    ['Anda bisa isi air sebelum kereta berikutnya yang berangkat dalam 7 menit.', false],
+    ['Kereta berikutnya berangkat 7 menit lagi.', true],
+    ['Kereta berangkat 7 menit lagi, jadi waktunya tidak cukup.', true],
+  ])('with enough time: "%s" is a problem: %s', async (message, problem) => {
+    expect(await verdictProblem(message)).toBe(problem);
+  });
+
+  // 08:08: the next train leaves in 2 minutes and 3 are needed.
+  it.each([
+    // Said by gpt-oss-20b in a live eval run.
+    ['Anda dapat mengisi air sebelum kereta berikutnya yang berangkat dalam 2 menit.', true],
+    ['Kamu masih sempat, kereta berikutnya 2 menit lagi.', true],
+    ['Kereta Bogor Line berangkat 2 menit lagi, cek papan informasi stasiun.', true],
+    ['Kereta berangkat 2 menit lagi, jadi waktunya tidak cukup.', false],
+    ['Kamu tidak akan sempat, kereta berangkat 2 menit lagi.', false],
+  ])('with too little time: "%s" is a problem: %s', async (message, problem) => {
+    expect(await verdictProblem(message, { now: WED_0808 })).toBe(problem);
+  });
+
+  it.each([
+    ['Water Station di Platform 3 tersedia, perkiraan 45 m.', true],
+    ['Data jadwal belum tersedia, jadi waktunya belum bisa dihitung.', false],
+    ['Jadwal belum tersedia, tapi kamu masih sempat.', true],
+  ])('without a schedule: "%s" is a problem: %s', async (message, problem) => {
+    expect(await verdictProblem(message, { dataset: 'no_schedule' })).toBe(problem);
+  });
+
+  it('accepts every deterministic time_to_refill answer', async () => {
+    for (const options of [{}, { now: WED_0808 }, { dataset: 'no_schedule' as const }]) {
+      const { answer } = await deterministic('time_to_refill', DEMO_STATIONS.manggarai, options);
+      expect(await verdictProblem(answer.message, options)).toBe(false);
+    }
+  });
+
+  it('applies only to time_to_refill', async () => {
+    const { evidence } = await collect('nearest_water');
+    const message = 'Water Station di Platform 3 tersedia, perkiraan 45 m dari titik tengah stasiun.';
+
+    expect(checkAnswer({ message, facilityIds: [] }, 'nearest_water', evidence).problems).toEqual(
+      [],
+    );
+  });
+});

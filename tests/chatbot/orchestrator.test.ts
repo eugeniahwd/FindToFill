@@ -9,7 +9,7 @@ import { DEMO_STATIONS, type DemoDataset } from '@/lib/chatbot/data/fakeData';
 import { FakeDataProvider } from '@/lib/chatbot/data/fakeProvider';
 import type { ChatbotDataProvider } from '@/lib/chatbot/data/provider';
 import { FakeLLMClient, type FakeLLMOptions } from '@/lib/chatbot/llm/fakeLlmClient';
-import { LLMError } from '@/lib/chatbot/llm/types';
+import { LLMError, type LLMRequest } from '@/lib/chatbot/llm/types';
 import { InMemoryChatLogger } from '@/lib/chatbot/logger';
 import { handleChat, type ChatDeps } from '@/lib/chatbot/orchestrator';
 import { FALLBACK_MESSAGES } from '@/lib/chatbot/prompts';
@@ -365,6 +365,91 @@ describe('handleChat model calls (latency and the gpt-oss "json" tool failure)',
     // The model never saw a facility, so its answer is not used.
     expect(response.message).toContain('perkiraan 45 m dari titik tengah stasiun');
     expect(response.cards.map((card) => card.facilityId)).toEqual(['fac-manggarai-water-p3']);
+  });
+
+  describe('answers that the checks catch (seen in live runs)', () => {
+    const WED_0808 = new Date('2026-11-18T01:08:00.000Z');
+    let warnSpy: jest.SpyInstance;
+    beforeEach(() => {
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+    afterEach(() => warnSpy.mockRestore());
+
+    // Scripted tool calls in the order a real model makes them; ids come from the last result.
+    const nearest = { toolCalls: [call('get_nearest_facility', { type: 'water', limit: 3 })] };
+    const status = (request: LLMRequest) => {
+      const tool = [...request.messages].reverse().find((m) => m.role === 'tool');
+      const output = JSON.parse(tool?.role === 'tool' ? tool.content : '{}') as {
+        facilities: { facility_id: string }[];
+      };
+      const ids = output.facilities.map((f) => f.facility_id);
+      return { toolCalls: [call('get_facility_status', { facility_ids: ids })] };
+    };
+    const train = (walk: number) => ({
+      toolCalls: [call('get_next_train', { walk_time_min: walk })],
+    });
+    const final = (message: string, ids: string[]) => ({
+      text: JSON.stringify({ message, facility_ids: ids }),
+    });
+    function call(name: string, args: Record<string, unknown>) {
+      return { id: `call_${name}`, name, args: { station_id: MANGGARAI, ...args } };
+    }
+
+    it('time_to_refill says there is time when there is not: replaced', async () => {
+      const { deps } = setup({
+        now: WED_0808,
+        model: {
+          mode: 'scripted',
+          steps: [
+            nearest,
+            status,
+            train(1),
+            final(
+              'Anda dapat mengisi air sebelum kereta berikutnya yang berangkat dalam 2 menit.',
+              ['fac-manggarai-water-p3'],
+            ),
+          ],
+        },
+      });
+      const { response } = await handleChat(ask('time_to_refill'), deps);
+
+      expect(response.message).toContain('jadi waktunya tidak cukup');
+      expect(warnSpy).toHaveBeenCalledWith('[chat] model answer replaced: time_verdict');
+    });
+
+    it('a train check made with the wrong walk time is not trusted', async () => {
+      // Walk time 5 gives 11 needed minutes, so "not enough" for the train in 7 minutes,
+      // while the real 1-minute walk needs 3: there is time.
+      const { deps, logger } = setup({
+        model: {
+          mode: 'scripted',
+          steps: [
+            nearest,
+            status,
+            train(5),
+            final('Kereta berangkat 7 menit lagi, jadi waktunya tidak cukup.', []),
+          ],
+        },
+      });
+      const { response } = await handleChat(ask('time_to_refill'), deps);
+
+      expect(response.message).toContain('jadi masih sempat');
+      const trainCalls = logger.entries[0].toolsCalled.filter((t) => t === 'get_next_train');
+      expect(trainCalls).toHaveLength(2);
+    });
+
+    it('no facility ids from the model for a facility question: cards from the data', async () => {
+      const message =
+        'Di Stasiun Manggarai, Water Station di Platform 3 tersedia, perkiraan 45 m dari titik ' +
+        'tengah stasiun, laporan terakhir 5 menit lalu.';
+      const { deps } = setup({
+        model: { mode: 'scripted', steps: [nearest, status, final(message, [])] },
+      });
+      const { response } = await handleChat(ask('nearest_water'), deps);
+
+      expect(response.message).toBe(message);
+      expect(response.cards.map((card) => card.facilityId)).toEqual(['fac-manggarai-water-p3']);
+    });
   });
 
   it('Groq rejects a generated tool call (400 tool_use_failed): the safe answer', async () => {

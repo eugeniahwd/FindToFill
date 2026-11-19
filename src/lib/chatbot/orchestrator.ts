@@ -325,7 +325,13 @@ async function decideAnswer(
   if (answer && hasEvidenceFor(quickMessageId, evidence)) {
     const check = checkAnswer(answer, quickMessageId, evidence);
     if (check.ok && !lacksFacilities(quickMessageId, evidence)) {
-      return { outcome: 'answered', message: answer.message, facilityIds: check.facilityIds };
+      // A facility answer without cards leaves the user nothing to tap: use the rows the
+      // deterministic answer would show (data rows, never model text).
+      const facilityIds =
+        check.facilityIds.length > 0 || FACILITY_TYPE[quickMessageId] === null
+          ? check.facilityIds
+          : composeAnswer(quickMessageId, evidence.outputs, ctx.station.name).facilityIds;
+      return { outcome: 'answered', message: answer.message, facilityIds };
     }
     if (!check.ok) console.warn(`[chat] model answer replaced: ${check.problems.join(', ')}`);
   }
@@ -338,10 +344,22 @@ function hasEvidenceFor(quickMessageId: QuickMessageId, evidence: Evidence): boo
   if (quickMessageId === 'review_summary') return outputs.reviews !== undefined;
   if (!outputs.nearest) return false;
   if (outputs.nearest.facilities.length > 0 && !outputs.status) return false;
-  if (quickMessageId === 'time_to_refill' && firstAvailableWater(evidence) && !outputs.trains) {
-    return false;
-  }
+  if (quickMessageId === 'time_to_refill' && staleTrains(evidence)) return false;
   return true;
+}
+
+/**
+ * time_to_refill needs a train check computed with the walk time of the nearest available
+ * dispenser. The model picks walk_time_min itself, so a check made with another value (and its
+ * enough_time) is not trusted.
+ */
+function staleTrains(evidence: Evidence): boolean {
+  const available = firstAvailableWater(evidence);
+  if (!available) return false;
+  const trains = evidence.outputs.trains;
+  if (!trains) return true;
+  if (!trains.data_available || trains.departures.length === 0) return false;
+  return trains.time_check?.needed_minutes !== 2 * available.walk_time_min + FILL_BUFFER_MIN;
 }
 
 function lacksFacilities(quickMessageId: QuickMessageId, evidence: Evidence): boolean {
@@ -384,14 +402,7 @@ async function ensureEvidence(
   }
 
   const available = quickMessageId === 'time_to_refill' ? firstAvailableWater(ctx.evidence) : null;
-  const trains = outputs.trains;
-  const needed = available ? 2 * available.walk_time_min + FILL_BUFFER_MIN : null;
-  const stale =
-    !trains ||
-    (trains.data_available &&
-      trains.departures.length > 0 &&
-      trains.time_check?.needed_minutes !== needed);
-  if (available && stale) {
+  if (available && staleTrains(ctx.evidence)) {
     const args = { station_id: stationId, walk_time_min: available.walk_time_min };
     await executeTool('get_next_train', args, ctx, limits);
   }
