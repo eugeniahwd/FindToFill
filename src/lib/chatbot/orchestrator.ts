@@ -34,6 +34,7 @@ import {
   FALLBACK_MESSAGES,
   FINAL_ANSWER_INSTRUCTION,
   FINAL_ANSWER_SCHEMA,
+  locationFallbackMessage,
   SYSTEM_PROMPT,
 } from './prompts';
 import { QUICK_MESSAGES, type ChatbotToolName } from './quickMessages';
@@ -211,15 +212,25 @@ async function runAgent(
   } catch {
     return unavailable;
   }
-  const location = resolveLocation(request.stationId, stations);
+  // The position is used here and in the tools' distances, then dropped with the request.
+  const position =
+    request.lat !== undefined && request.lng !== undefined
+      ? { latitude: request.lat, longitude: request.lng }
+      : undefined;
+  const location = resolveLocation({ stationId: request.stationId, position }, stations);
   if (!location.detected) {
-    const message =
-      location.reason === 'no_location' ? FALLBACK_MESSAGES.noLocation : FALLBACK_MESSAGES.noData;
+    const message = locationFallbackMessage(location.reason);
     return { ...fallbackResponse('fallback_no_data', message, now), needsStationSelection: true };
   }
   if (!deps.llm) return unavailable;
 
-  const ctx: ToolContext = { provider: deps.provider, station: location.station, now, evidence };
+  const ctx: ToolContext = {
+    provider: deps.provider,
+    station: location.station,
+    location,
+    now,
+    evidence,
+  };
   const answer = await askModel(request.quickMessageId, deps.llm, ctx, limits, signal);
   const final = await decideAnswer(request.quickMessageId, answer, ctx, limits);
 
@@ -232,8 +243,8 @@ async function runAgent(
     detectedStation: {
       id: location.station.id,
       name: location.station.name,
-      source: 'manual',
-      needsConfirmation: false,
+      source: location.source,
+      needsConfirmation: location.needsConfirmation,
     },
     generatedAt: now.toISOString(),
   };
@@ -473,7 +484,8 @@ async function buildCards(facilityIds: string[], ctx: ToolContext): Promise<Chat
         locationDetail: facility.location_detail,
         level: facility.level,
         distanceM: facility.distance_m,
-        distanceIsApproximate: true,
+        // Every distance in one request comes from the same origin (ctx.location).
+        distanceIsApproximate: ctx.location?.distanceBasis !== 'user_position',
         walkTimeMin: facility.walk_time_min,
         status: known?.status ?? row?.status ?? 'unknown',
         lastReportedAt,

@@ -65,8 +65,7 @@ function nearestAnswer(type: FacilityType, outputs: ToolOutputs, station: string
     };
   }
 
-  const where =
-    `${place(available)}, perkiraan ${available.distance_m} m dari titik tengah stasiun`;
+  const where = `${place(available)}, ${away(outputs, `${available.distance_m} m`)}`;
   const report = reportPhrase(statusOf(outputs, available));
   if (available === nearest) {
     return {
@@ -122,7 +121,7 @@ function refillAnswer(outputs: ToolOutputs, station: string): ComposedAnswer {
   // The report phrase goes last: place() can already end in brackets ("Water Station (Exit A)").
   const first =
     `Di ${station}, dispenser air terdekat yang tersedia ada di ${place(available)}, ` +
-    `perkiraan ${available.walk_time_min} menit jalan dari titik tengah stasiun, ` +
+    `${away(outputs, `${available.walk_time_min} menit jalan`)}, ` +
     `${reportPhrase(statusOf(outputs, available))}.`;
   const trains = outputs.trains;
   const soonest = trains?.departures[0];
@@ -196,6 +195,13 @@ function statusOf(outputs: ToolOutputs, facility: FacilityOutput): StatusOutputR
       active_report_count: 0,
     }
   );
+}
+
+/** "sekitar 45 m dari posisimu" with GPS, else "perkiraan 45 m dari titik tengah stasiun". */
+function away(outputs: ToolOutputs, amount: string): string {
+  return outputs.nearest?.distance_basis === 'user_position'
+    ? `sekitar ${amount} dari posisimu`
+    : `perkiraan ${amount} dari titik tengah stasiun`;
 }
 
 function place(facility: FacilityOutput): string {

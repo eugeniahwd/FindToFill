@@ -1,8 +1,8 @@
 /**
  * src/lib/chatbot/validation.ts
  *
- * Request validation for POST /api/chat (docs/AI_TRACK.md §9 step 1). Rejected: unknown ids and
- * any extra field, such as free text or lat/lng (GPS never reaches the server).
+ * Request validation for POST /api/chat (docs/AI_TRACK.md §9 step 1). Rejected: unknown ids,
+ * any extra field such as free text, and a GPS position that is half missing or out of range.
  *
  * Answer validation (§9 step 7): the model's final JSON is only used when every facility id and
  * every number comes from this request's tool results and no broken facility is called working.
@@ -19,11 +19,22 @@ const STATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 export const ChatRequestSchema = z
   .object({
     quickMessageId: z.enum(QUICK_MESSAGE_IDS),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
     stationId: z.string().regex(STATION_ID_PATTERN).optional(),
     // Chat logs will store the session id, so only a random UUID is accepted, never personal data.
     sessionId: z.string().uuid().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((request, ctx) => {
+    // A position is a pair. The issue names the missing field, never a value.
+    if (request.lat !== undefined && request.lng === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['lng'], message: 'lng is required with lat' });
+    }
+    if (request.lng !== undefined && request.lat === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['lat'], message: 'lat is required with lng' });
+    }
+  });
 
 // ─── Answer validation ────────────────────────────────────────────────────────
 

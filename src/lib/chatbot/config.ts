@@ -5,8 +5,10 @@
  * tests/chatbot/config.test.ts fails if the values both files define drift apart.
  */
 
-// ─── Walking ──────────────────────────────────────────────────────────────────
-// GPS stays in the browser, so station detection radii live in the shared config only.
+// ─── Location and walking ─────────────────────────────────────────────────────
+// GPS within this distance of a pilot station's center counts as being at that station
+// (docs/SPEC.md §4.2). Farther away, the user picks a station.
+export const STATION_DETECTION_RADIUS_M = 800;
 export const WALKING_SPEED_MPS = 1.2;
 export const FILL_BUFFER_MIN = 1;
 

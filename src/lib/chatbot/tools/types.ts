@@ -8,14 +8,17 @@
 import type { z } from 'zod';
 import type { FacilityStatus, FacilityType } from '../contract';
 import type { ChatbotDataProvider, StationRef } from '../data/provider';
+import type { DetectedLocation, DistanceBasis } from '../geo';
 import type { ChatbotToolName } from '../quickMessages';
 
 export interface LocationOutput {
   detected: true;
-  source: 'manual';
+  source: 'gps' | 'manual';
   station: { id: string; name: string };
-  needs_confirmation: false;
-  distance_basis: 'station_center';
+  needs_confirmation: boolean;
+  distance_basis: DistanceBasis;
+  /** Only with GPS: meters from the user to the station center. Never the coordinates. */
+  distance_to_station_m?: number;
 }
 
 export interface FacilityOutput {
@@ -32,7 +35,7 @@ export interface FacilityOutput {
 export interface NearestOutput {
   station_id: string;
   type: FacilityType | 'any';
-  distance_basis: 'station_center';
+  distance_basis: DistanceBasis;
   facilities: FacilityOutput[];
 }
 
@@ -103,6 +106,12 @@ export interface ToolContext {
   provider: ChatbotDataProvider;
   /** The station resolved before the first model call (resolveLocation). */
   station: StationRef;
+  /**
+   * How it was resolved, with the origin of facility distances. Server-side only: tools put
+   * distances in their results, never this origin. Absent: the station center, as for a
+   * manually picked station.
+   */
+  location?: DetectedLocation;
   now: Date;
   evidence: Evidence;
 }

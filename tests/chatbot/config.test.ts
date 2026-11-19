@@ -7,6 +7,7 @@ import {
   REPORT_WINDOW_DAYS,
   REVIEW_LIMIT,
   REVIEW_SNIPPET_MAX_CHARS,
+  STATION_DETECTION_RADIUS_M,
   TIMEZONE,
   WALKING_SPEED_MPS,
 } from '@/lib/chatbot/config';
@@ -17,6 +18,7 @@ describe('chatbot config', () => {
   // schedule time checks, review snippets).
   it('agrees with the shared app config on the values both define', () => {
     expect(WALKING_SPEED_MPS).toBe(APP_CONFIG.WALKING_SPEED_MPS);
+    expect(STATION_DETECTION_RADIUS_M).toBe(APP_CONFIG.STATION_DETECTION_RADIUS_M);
     expect(REPORT_WINDOW_DAYS).toBe(APP_CONFIG.ACTIVE_REPORT_WINDOW_DAYS);
     expect(RATE_LIMIT_WINDOW_SEC * 1000).toBe(APP_CONFIG.RATE_LIMIT_WINDOW_MS);
     expect(RATE_LIMIT_CHAT).toBe(APP_CONFIG.MAX_CHAT_PER_HOUR);

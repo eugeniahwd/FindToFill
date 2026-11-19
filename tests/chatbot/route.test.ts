@@ -129,11 +129,34 @@ describe('POST /api/chat in stub mode (the default)', () => {
     });
   });
 
-  describe('coordinates (GPS stays in the browser)', () => {
+  describe('GPS position', () => {
+    it('detects Manggarai from a position at the station, without a stationId', async () => {
+      const { status, data } = await send({
+        quickMessageId: 'nearest_water',
+        lat: -6.2098,
+        lng: 106.8501,
+      });
+
+      expect(status).toBe(200);
+      expect(data.outcome).toBe('answered');
+      expect(data.detectedStation).toMatchObject({ id: STUB_STATION.id, source: 'gps' });
+    });
+
+    it('asks for a station when the position is not at a pilot station', async () => {
+      const { status, data } = await send({ quickMessageId: 'nearest_water', lat: -6.4, lng: 106.8 });
+
+      expect(status).toBe(200);
+      expect(data.outcome).toBe('fallback_no_data');
+      expect(data.message).toBe(FALLBACK_MESSAGES.outsidePilotArea);
+      expect(data.needsStationSelection).toBe(true);
+    });
+
     it.each([
-      ['lat and lng', { lat: -6.2, lng: 106.85 }],
       ['lat only', { lat: -6.2 }],
       ['lng only', { lng: 106.85 }],
+      ['lat out of range', { lat: -96.2, lng: 106.85 }],
+      ['lng out of range', { lat: -6.2, lng: 186.85 }],
+      ['text instead of numbers', { lat: '-6.2', lng: '106.85' }],
     ])('rejects %s with HTTP 400', async (_case, coordinates) => {
       const { status, data } = await send({
         quickMessageId: 'nearest_water',
@@ -191,9 +214,15 @@ describe('POST /api/chat in stub mode (the default)', () => {
   describe('logging of rejected requests', () => {
     it.each([
       [
-        'coordinates',
-        { quickMessageId: 'nearest_water', ...STATION, lat: -6.987654, lng: 106.85 },
-        '(body)',
+        'an impossible latitude',
+        { quickMessageId: 'nearest_water', ...STATION, lat: -96.987654, lng: 106.85 },
+        'lat',
+        '96.987654',
+      ],
+      [
+        'half a GPS position',
+        { quickMessageId: 'nearest_water', ...STATION, lat: -6.987654 },
+        'lng',
         '6.987654',
       ],
       [

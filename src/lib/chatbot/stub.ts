@@ -4,9 +4,10 @@
  * Canned ChatResponse objects for CHATBOT_MODE=stub, so the Frontend can integrate before the
  * orchestrator exists. Data: the Manggarai demo fixture from docs/AI_TRACK.md §10, not field data.
  *
- * - stationId "station-manggarai" gets the canned answers. GPS stays in the browser, so every
- *   distance is measured from the station center (approximate).
- * - Any other stationId gets the no-data fallback; no stationId gets the station-picker one.
+ * - stationId "station-manggarai", or a GPS position within the detection radius of Manggarai,
+ *   gets the canned answers. Their distances are canned too (from the station center).
+ * - Any other stationId gets the no-data fallback; GPS outside the radius gets the "not at a
+ *   pilot station" one; neither gets the station-picker one.
  */
 
 import type {
@@ -18,9 +19,13 @@ import type {
   FacilityType,
 } from './contract';
 import { FILL_BUFFER_MIN, MAX_CARDS, REPORT_WINDOW_DAYS, WALKING_SPEED_MPS } from './config';
-import { FALLBACK_MESSAGES } from './prompts';
+import type { StationRef } from './data/provider';
+import { resolveLocation } from './geo';
+import { locationFallbackMessage } from './prompts';
 
 export const STUB_STATION = { id: 'station-manggarai', name: 'Manggarai' } as const;
+// The same center as the Manggarai demo station in data/fakeData.ts (OpenStreetMap).
+const STUB_STATION_REF: StationRef = { ...STUB_STATION, latitude: -6.21017, longitude: 106.84994 };
 
 interface StubFacility {
   facilityId: string;
@@ -112,18 +117,18 @@ const NEXT_TRAIN = { line: 'Bogor', direction: 'Jakarta Kota', minutesUntil: 7 }
 const REVIEWS = { count: 12, averageRating: '4,2', commonTheme: 'airnya dingin dan bersih' };
 
 export function getStubChatResponse(request: ChatRequest, now: Date = new Date()): ChatResponse {
-  if (request.stationId === undefined) {
-    return stubFallback(FALLBACK_MESSAGES.noLocation, now);
-  }
-  if (request.stationId !== STUB_STATION.id) {
-    return stubFallback(FALLBACK_MESSAGES.noData, now);
-  }
+  const position =
+    request.lat !== undefined && request.lng !== undefined
+      ? { latitude: request.lat, longitude: request.lng }
+      : undefined;
+  const location = resolveLocation({ stationId: request.stationId, position }, [STUB_STATION_REF]);
+  if (!location.detected) return stubFallback(locationFallbackMessage(location.reason), now);
 
   const detectedStation: DetectedStation = {
     id: STUB_STATION.id,
     name: STUB_STATION.name,
-    source: 'manual',
-    needsConfirmation: false,
+    source: location.source,
+    needsConfirmation: location.needsConfirmation,
   };
   const station = `Stasiun ${STUB_STATION.name}`;
   const distance = (meters: number) => `perkiraan ${meters} m dari titik tengah stasiun`;

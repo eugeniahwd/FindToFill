@@ -8,6 +8,7 @@ import { createFakeDataProvider } from '@/lib/chatbot/data';
 import { DEMO_STATIONS, type DemoDataset } from '@/lib/chatbot/data/fakeData';
 import { FakeDataProvider } from '@/lib/chatbot/data/fakeProvider';
 import type { ChatbotDataProvider } from '@/lib/chatbot/data/provider';
+import { distanceMeters } from '@/lib/chatbot/geo';
 import { FakeLLMClient, type FakeLLMOptions } from '@/lib/chatbot/llm/fakeLlmClient';
 import { LLMError, type LLMRequest } from '@/lib/chatbot/llm/types';
 import { InMemoryChatLogger } from '@/lib/chatbot/logger';
@@ -114,6 +115,93 @@ describe('handleChat with the well-behaved model', () => {
   });
 });
 
+describe('handleChat with the GPS position', () => {
+  // Next to Exit A at Manggarai: from here the nearest dispenser is Exit A (empty), while from
+  // the station center it is Platform 3. Unusual digits, so a leak is easy to spot.
+  const NEAR_EXIT_A = { lat: -6.21081, lng: 106.85093 };
+  // Depok, about 20 km from every pilot station.
+  const FAR_AWAY = { lat: -6.4025, lng: 106.7942 };
+  const gps = (id: QuickMessageId, position: { lat: number; lng: number }) => ({
+    quickMessageId: id,
+    ...position,
+  });
+
+  it('detects the station from GPS and measures every distance from the user', async () => {
+    const { deps } = setup();
+    const { response } = await handleChat(gps('nearest_water', NEAR_EXIT_A), deps);
+
+    expect(response.detectedStation).toEqual({
+      id: MANGGARAI,
+      name: 'Manggarai',
+      source: 'gps',
+      needsConfirmation: false,
+    });
+    const rows = await createFakeDataProvider('default', NOW).listFacilities(MANGGARAI, 'water');
+    const user = { latitude: NEAR_EXIT_A.lat, longitude: NEAR_EXIT_A.lng };
+    for (const card of response.cards) {
+      const row = rows.find((r) => r.id === card.facilityId);
+      expect(row).toBeDefined();
+      if (row) expect(card.distanceM).toBe(distanceMeters(user, row));
+      expect(card.distanceIsApproximate).toBe(false);
+    }
+    // The empty Exit A dispenser is nearest from here; Platform 3 is the available one.
+    expect(response.message).toContain('Water Refill (Exit A), berstatus kosong');
+    expect(response.message).toMatch(/Platform 3, sekitar \d+ m dari posisimu/);
+    expect(response.message).not.toContain('titik tengah');
+  });
+
+  it('uses the user position for the walk time in time_to_refill', async () => {
+    const { deps } = setup();
+    const { response } = await handleChat(gps('time_to_refill', NEAR_EXIT_A), deps);
+
+    // Platform 3 is about 160 m from here: 3 minutes each way, 7 needed for the 7-minute train.
+    expect(response.message).toContain('sekitar 3 menit jalan dari posisimu');
+    expect(response.message).toContain('butuh sekitar 7 menit pulang-pergi, jadi masih sempat');
+  });
+
+  it('outside every pilot station: asks for a station, without a model call', async () => {
+    const { deps, llm } = setup();
+    const { response } = await handleChat(gps('nearest_water', FAR_AWAY), deps);
+
+    expect(response).toMatchObject({
+      outcome: 'fallback_no_data',
+      message: FALLBACK_MESSAGES.outsidePilotArea,
+      needsStationSelection: true,
+      detectedStation: null,
+    });
+    expect(llm.requests).toHaveLength(0);
+  });
+
+  it('far from a station the user picked: distances from its center, approximate', async () => {
+    const { deps } = setup();
+    const { response } = await handleChat(
+      { ...gps('nearest_water', FAR_AWAY), stationId: MANGGARAI },
+      deps,
+    );
+
+    expect(response.detectedStation).toMatchObject({ id: MANGGARAI, source: 'manual' });
+    expect(response.message).toContain('perkiraan 45 m dari titik tengah stasiun');
+    expect(response.cards.every((card) => card.distanceIsApproximate)).toBe(true);
+  });
+
+  it('never sends, keeps, or logs the coordinates', async () => {
+    const { deps, llm, logger } = setup();
+    const { response, evidence } = await handleChat(gps('time_to_refill', NEAR_EXIT_A), deps);
+
+    const seen = JSON.stringify({ requests: llm.requests, logs: logger.entries, response, evidence });
+    for (const digits of ['21081', '85093']) expect(seen).not.toContain(digits);
+    const location = llm.requests[0].messages.find((m) => m.role === 'tool');
+    expect(JSON.parse(location?.role === 'tool' ? location.content : '{}')).toEqual({
+      detected: true,
+      source: 'gps',
+      station: { id: MANGGARAI, name: 'Manggarai' },
+      needs_confirmation: false,
+      distance_basis: 'user_position',
+      distance_to_station_m: expect.any(Number),
+    });
+  });
+});
+
 describe('edge cases from docs/AI_TRACK.md §11', () => {
   it('no stationId: needsStationSelection without a model call', async () => {
     const { deps, llm } = setup();
@@ -141,18 +229,24 @@ describe('edge cases from docs/AI_TRACK.md §11', () => {
     expect(llm.requests).toHaveLength(0);
   });
 
-  it('lat/lng or extra client text: 400 rejected', async () => {
+  it('half a GPS position, an impossible one, or extra client text: 400 rejected', async () => {
     const { deps, llm, logger } = setup();
-    const withGps = await handleChat({ ...ask('nearest_water'), lat: -6.2, lng: 106.8 }, deps);
+    const halfGps = await handleChat({ ...ask('nearest_water'), lat: -6.2 }, deps);
+    const badGps = await handleChat({ ...ask('nearest_water'), lat: -96.2, lng: 106.8 }, deps);
     const withText = await handleChat({ ...ask('nearest_water'), text: 'halo' }, deps);
     const unknownId = await handleChat({ quickMessageId: 'tell_me_a_joke' }, deps);
 
-    for (const result of [withGps, withText, unknownId]) {
+    for (const result of [halfGps, badGps, withText, unknownId]) {
       expect(result.status).toBe(400);
       expect(result.response.outcome).toBe('rejected');
     }
     expect(llm.requests).toHaveLength(0);
-    expect(logger.entries.map((e) => e.quickMessageId)).toEqual(['unknown', 'unknown', 'unknown']);
+    expect(logger.entries.map((e) => e.quickMessageId)).toEqual([
+      'unknown',
+      'unknown',
+      'unknown',
+      'unknown',
+    ]);
   });
 
   it('no facility of the type: honest message, no cards, fallback_no_data', async () => {
