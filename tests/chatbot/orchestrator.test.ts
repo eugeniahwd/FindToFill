@@ -9,6 +9,7 @@ import { DEMO_STATIONS, type DemoDataset } from '@/lib/chatbot/data/fakeData';
 import { FakeDataProvider } from '@/lib/chatbot/data/fakeProvider';
 import type { ChatbotDataProvider } from '@/lib/chatbot/data/provider';
 import { FakeLLMClient, type FakeLLMOptions } from '@/lib/chatbot/llm/fakeLlmClient';
+import { LLMError } from '@/lib/chatbot/llm/types';
 import { InMemoryChatLogger } from '@/lib/chatbot/logger';
 import { handleChat, type ChatDeps } from '@/lib/chatbot/orchestrator';
 import { FALLBACK_MESSAGES } from '@/lib/chatbot/prompts';
@@ -259,7 +260,9 @@ describe('edge cases from docs/AI_TRACK.md §11', () => {
     });
     const { response } = await handleChat(ask('nearest_water'), deps);
 
-    const toolReplies = llm.requests[1].messages.filter((m) => m.role === 'tool');
+    const toolReplies = llm.requests[1].messages.filter(
+      (m) => m.role === 'tool' && m.toolCallId.startsWith('call_bad'),
+    );
     expect(toolReplies.map((m) => (m.role === 'tool' ? JSON.parse(m.content) : null))).toEqual([
       { error: 'This tool is not available for this question.' },
       { error: 'This tool is not available for this question.' },
@@ -306,16 +309,79 @@ describe('edge cases from docs/AI_TRACK.md §11', () => {
   });
 });
 
-describe('handleChat robustness', () => {
-  it('plain text instead of JSON: one final call without tools, strict schema', async () => {
-    const { deps, llm } = setup({ model: { mode: 'adversarial', attack: 'not_json' } });
-    const { response } = await handleChat(ask('nearest_water'), deps);
-    const last = llm.requests[llm.requests.length - 1];
+describe('handleChat model calls (latency and the gpt-oss "json" tool failure)', () => {
+  it('resolves the location on the server before the first model call', async () => {
+    const { deps, llm, logger } = setup();
+    await handleChat(ask('nearest_water'), deps);
 
+    const first = llm.requests[0].messages;
+    expect(first[1]).toEqual({
+      role: 'assistant',
+      content: null,
+      toolCalls: [{ id: 'call_location', name: 'get_user_location', args: {} }],
+    });
+    expect(first[2]).toMatchObject({ role: 'tool', toolCallId: 'call_location' });
+    expect(JSON.parse(first[2].role === 'tool' ? first[2].content : '{}')).toMatchObject({
+      detected: true,
+      station: { id: MANGGARAI, name: 'Manggarai' },
+    });
+    expect(logger.entries[0].toolsCalled[0]).toBe('get_user_location');
+  });
+
+  it.each([
+    ['nearest_water', 3],
+    ['time_to_refill', 4],
+    ['review_summary', 2],
+  ] as const)(
+    '%s: asks for the answer without tools once the evidence is complete (%i calls)',
+    async (id, calls) => {
+      const { deps, llm } = setup();
+      await handleChat(ask(id), deps);
+
+      expect(llm.requests).toHaveLength(calls);
+      const last = llm.requests[calls - 1];
+      expect(last.tools).toBeUndefined();
+      expect(last.jsonSchema?.name).toBe('chat_answer');
+      expect(llm.requests.slice(0, -1).every((request) => request.tools?.length)).toBe(true);
+    },
+  );
+
+  it('plain text before the evidence is complete: one strict call, then the safe answer', async () => {
+    const { deps, llm } = setup({
+      model: {
+        mode: 'scripted',
+        steps: [
+          { text: 'Dispenser air ada di dekat tangga.' },
+          { text: JSON.stringify({ message: 'Ada di dekat tangga.', facility_ids: [] }) },
+        ],
+      },
+    });
+    const { response } = await handleChat(ask('nearest_water'), deps);
+
+    const last = llm.requests[1];
     expect(last.tools).toBeUndefined();
     expect(last.jsonSchema?.name).toBe('chat_answer');
-    expect(response.message).toContain('perkiraan 45 m');
+    expect(last.messages[last.messages.length - 1]).toMatchObject({ role: 'user' });
+    // The model never saw a facility, so its answer is not used.
+    expect(response.message).toContain('perkiraan 45 m dari titik tengah stasiun');
+    expect(response.cards.map((card) => card.facilityId)).toEqual(['fac-manggarai-water-p3']);
   });
+
+  it('Groq rejects a generated tool call (400 tool_use_failed): the safe answer', async () => {
+    const { deps } = setup({
+      model: {
+        mode: 'scripted',
+        steps: [new LLMError('bad_output', 'tool_use_failed', 400)],
+      },
+    });
+    const { response } = await handleChat(ask('nearest_charging'), deps);
+
+    expect(response.outcome).toBe('answered');
+    expect(response.message).toContain('Charging Lounge');
+  });
+});
+
+describe('handleChat robustness', () => {
 
   it('no data source or no model configured: fallback_ai_unavailable', async () => {
     const noProvider = await handleChat(ask('nearest_water'), setup({ provider: null }).deps);

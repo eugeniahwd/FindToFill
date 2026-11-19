@@ -239,7 +239,15 @@ async function runAgent(
   };
 }
 
-/** The bounded tool loop (§9 steps 4 to 6). Returns null when the model gave no usable JSON. */
+/**
+ * The bounded tool loop (§9 steps 4 to 6). Returns null when the model gave no usable JSON.
+ * Two choices keep it inside the latency budget and away from a gpt-oss failure mode:
+ * - get_user_location runs on the server first (the station is already resolved), so the model
+ *   starts from its result instead of spending a round trip on it.
+ * - Once the evidence for the question is complete, the answer comes from a call without tools
+ *   and with the strict JSON schema. With tools on, gpt-oss sometimes wraps its JSON answer as
+ *   a call to a tool named "json", which Groq rejects with 400 tool_use_failed.
+ */
 async function askModel(
   quickMessageId: QuickMessageId,
   llm: LLMClient,
@@ -261,38 +269,45 @@ async function askModel(
       ...extra,
     });
   };
+  const pushToolResults = (calls: LLMToolCall[], results: ToolResult[]) => {
+    calls.forEach((call, j) => {
+      const result = results[j];
+      messages.push({
+        role: 'tool',
+        toolCallId: call.id,
+        name: call.name,
+        content: JSON.stringify(result.ok ? result.output : { error: result.error }),
+      });
+    });
+  };
+  const strictAnswer = async () =>
+    parseFinalAnswer((await ask({ jsonSchema: FINAL_ANSWER_SCHEMA })).text);
+
+  const locationCall: LLMToolCall = { id: 'call_location', name: 'get_user_location', args: {} };
+  messages.push({ role: 'assistant', content: null, toolCalls: [locationCall] });
+  pushToolResults([locationCall], [await executeTool(locationCall.name, {}, ctx, limits)]);
 
   try {
-    let finalText: string | undefined;
-    for (let i = 0; i < limits.maxToolIterations && finalText === undefined; i++) {
+    for (let i = 0; i < limits.maxToolIterations; i++) {
+      if (hasEvidenceFor(quickMessageId, ctx.evidence)) return await strictAnswer();
       const reply = await ask({ tools });
       if (!reply.toolCalls?.length) {
-        finalText = reply.text ?? '';
-        break;
+        const answer = parseFinalAnswer(reply.text);
+        if (answer) return answer;
+        // Groq cannot combine tools and structured output, so the JSON comes from a call without
+        // tools.
+        if (reply.text) messages.push({ role: 'assistant', content: reply.text });
+        messages.push({ role: 'user', content: FINAL_ANSWER_INSTRUCTION });
+        return await strictAnswer();
       }
       messages.push({ role: 'assistant', content: reply.text ?? null, toolCalls: reply.toolCalls });
       const results = await Promise.all(
         reply.toolCalls.map((call) => runToolCall(call, question.allowedTools, ctx, limits)),
       );
-      reply.toolCalls.forEach((call, j) => {
-        const result = results[j];
-        messages.push({
-          role: 'tool',
-          toolCallId: call.id,
-          name: call.name,
-          content: JSON.stringify(result.ok ? result.output : { error: result.error }),
-        });
-      });
+      pushToolResults(reply.toolCalls, results);
     }
     // The model never stopped calling tools: deterministic answer (§11).
-    if (finalText === undefined) return null;
-
-    const answer = parseFinalAnswer(finalText);
-    if (answer) return answer;
-    // Groq cannot combine tools and structured output, so the JSON comes from a call without tools.
-    if (finalText) messages.push({ role: 'assistant', content: finalText });
-    messages.push({ role: 'user', content: FINAL_ANSWER_INSTRUCTION });
-    return parseFinalAnswer((await ask({ jsonSchema: FINAL_ANSWER_SCHEMA })).text);
+    return null;
   } catch (err) {
     if (err instanceof LLMError && err.kind === 'bad_output') return null;
     throw err;
