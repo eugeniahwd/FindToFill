@@ -25,14 +25,32 @@ export class RecordReplayLLMClient implements LLMClient {
 
   async generate(request: LLMRequest): Promise<LLMResponse> {
     const file = join(this.directory, `${requestKey(request)}.json`);
-    if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as LLMResponse;
+    if (existsSync(file)) return replay(JSON.parse(readFileSync(file, 'utf8')) as Recording);
     if (this.mode === 'replay') throw new LLMError('unavailable', `No recording for ${file}`);
     if (!this.inner) throw new LLMError('unavailable', 'Record mode needs a model.');
-    const response = await this.inner.generate(request);
+
+    let recording: Recording;
+    try {
+      recording = await this.inner.generate(request);
+    } catch (err) {
+      // A rejected model output (such as Groq's 400 tool_use_failed) is part of the run and is
+      // saved. Quota, server, and network errors are not: the next run should try again.
+      if (!(err instanceof LLMError) || err.kind !== 'bad_output') throw err;
+      recording = { error: { kind: 'bad_output', status: err.status } };
+    }
     mkdirSync(this.directory, { recursive: true });
-    writeFileSync(file, `${JSON.stringify(response, null, 2)}\n`);
-    return response;
+    writeFileSync(file, `${JSON.stringify(recording, null, 2)}\n`);
+    return replay(recording);
   }
+}
+
+type Recording = LLMResponse | { error: { kind: 'bad_output'; status?: number } };
+
+function replay(recording: Recording): LLMResponse {
+  if ('error' in recording) {
+    throw new LLMError('bad_output', 'Recorded model output error.', recording.error.status);
+  }
+  return recording;
 }
 
 /** The same conversation always gets the same key (the abort signal is not part of it). */

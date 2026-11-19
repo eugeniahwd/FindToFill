@@ -5,7 +5,21 @@ import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RecordReplayLLMClient, requestKey } from '../../src/lib/chatbot/llm/recordReplay';
-import type { LLMClient, LLMRequest, LLMResponse } from '../../src/lib/chatbot/llm/types';
+import {
+  LLMError,
+  type LLMClient,
+  type LLMRequest,
+  type LLMResponse,
+} from '../../src/lib/chatbot/llm/types';
+
+class FailingClient implements LLMClient {
+  calls = 0;
+  constructor(private readonly error: LLMError) {}
+  async generate(): Promise<LLMResponse> {
+    this.calls += 1;
+    throw this.error;
+  }
+}
 
 const REQUEST: LLMRequest = {
   systemPrompt: 'SYSTEM',
@@ -64,6 +78,27 @@ describe('RecordReplayLLMClient', () => {
     expect(again).toEqual({ text: 'first' });
     expect(second.calls).toBe(0);
     expect(readdirSync(directory)).toHaveLength(1);
+  });
+
+  it('records a rejected model output (400) and replays it as the same error', async () => {
+    const inner = new FailingClient(new LLMError('bad_output', 'tool_use_failed', 400));
+
+    await expect(
+      new RecordReplayLLMClient('record', directory, inner).generate(REQUEST),
+    ).rejects.toMatchObject({ kind: 'bad_output', status: 400 });
+    await expect(
+      new RecordReplayLLMClient('replay', directory).generate(REQUEST),
+    ).rejects.toMatchObject({ kind: 'bad_output', status: 400 });
+    expect(inner.calls).toBe(1);
+  });
+
+  it('does not record quota or server errors, so the next run tries again', async () => {
+    const inner = new FailingClient(new LLMError('unavailable', 'rate limited', 429));
+
+    await expect(
+      new RecordReplayLLMClient('record', directory, inner).generate(REQUEST),
+    ).rejects.toMatchObject({ kind: 'unavailable', status: 429 });
+    expect(readdirSync(directory)).toHaveLength(0);
   });
 
   it('fails as unavailable when a recording is missing', async () => {
