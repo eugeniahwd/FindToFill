@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_0d30c2d4-c4d6-4d77-9a95-e71d2c588a2d",
+      "name": "get_nearest_facility",
+      "args": {
+        "limit": 3,
+        "station_id": "station-manggarai",
+        "type": "charging"
+      }
+    }
+  ]
+}

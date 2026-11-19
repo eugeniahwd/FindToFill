@@ -1,0 +1,11 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_3ea72a44-ac1f-4353-b18f-a3a986bfce87",
+      "name": "search_reviews",
+      "args": {
+        "station_id": "station-manggarai"
+      }
+    }
+  ]
+}

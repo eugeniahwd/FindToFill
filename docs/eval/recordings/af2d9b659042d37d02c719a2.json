@@ -1,0 +1,15 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_9d7c0a2e-8886-409a-98e1-ec7b43f09b0b",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-tebet-water-gate-a",
+          "fac-tebet-charging-p1",
+          "fac-tebet-water-p2"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_1efd7b29-8a32-470d-b54e-c1aaa00e7dcd",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-sudirman-water-kendal",
+          "fac-sudirman-charging-hall",
+          "fac-sudirman-water-platform"
+        ]
+      }
+    }
+  ]
+}

@@ -186,6 +186,43 @@ Each card has `name`, `platform`, `locationDetail`, `distanceM`, `walkTimeMin`, 
 
 **Pilot stations:** 3, as in the seed data: Manggarai, Sudirman, and Tebet. `docs/SPEC.md` §3 still names 5; SPEC lets the team change the list, and the seed data is the source.
 
-**Stub mode** (`CHATBOT_MODE` unset or `stub`) returns canned demo answers and needs no keys. It only knows `stationId: "station-manggarai"`; any other `stationId`, including real database ids, gets the no-data fallback, and a request without `stationId` gets the station-picker fallback. `fake` and `live` return `fallback_ai_unavailable` until they are built. The limit is 20 requests per hour per client, kept in memory, so restarting `npm run dev` resets it.
+**Which answers you get** depends on `CHATBOT_MODE` (details in [AI module handoff](#ai-module-handoff)). With the defaults (`stub`), only `stationId: "station-manggarai"` has data. With `CHATBOT_MODE=fake`, the three demo pilot stations `station-manggarai`, `station-sudirman`, and `station-tebet` answer. Any other `stationId`, including real database ids before `CHATBOT_DATA=supabase` is wired, gets the no-data fallback with the station picker.
 
-**Rate limit caveat:** the route still counts in memory per server instance. On Vercel, each instance keeps its own count and starts from zero after a cold start, so the limit is best-effort until the route switches to Backend's database-backed `consumeRateLimit()` with the orchestrator. The key comes from Backend's `chatRateLimitKey()` (an HMAC of the IP with `IP_HASH_SALT`), so production must set `IP_HASH_SALT`; without it every chat request returns 500.
+**Rate limit:** 20 requests per hour per client. The key comes from Backend's `chatRateLimitKey()`: the user id when signed in (supabase mode), otherwise an HMAC of the IP with `IP_HASH_SALT`. Production must set `IP_HASH_SALT`; without it every chat request returns 500. With `CHATBOT_DATA=fake` the count is kept in memory per server instance, so restarting `npm run dev` or a Vercel cold start resets it. With `CHATBOT_DATA=supabase` it is stored in `rate_limit_events`.
+
+---
+
+## AI module handoff
+
+The chatbot answers only the 5 quick messages. Every fact (station, facility, status, distance, time) comes from a tool result; the server checks the model's answer and replaces it with a fixed-template answer built from the same data when it fails a check. See [docs/AI_TRACK.md](docs/AI_TRACK.md) for the full design.
+
+### Modes
+
+| `CHATBOT_MODE` | Who answers | Needs |
+|---|---|---|
+| `stub` (default) | Canned answers from `src/lib/chatbot/stub.ts` | Nothing |
+| `fake` | The real orchestrator with a rule-based fake model | Nothing (no network) |
+| `live` | The real orchestrator with Groq | `GROQ_API_KEY`, `GROQ_MODEL` |
+
+| `CHATBOT_DATA` | Data, rate limit, logs |
+|---|---|
+| `fake` (default) | Demo data for the 3 pilot stations, in-memory rate limit, one `[chat]` console line per request |
+| `supabase` | Backend's provider, `rate_limit_events`, `chat_logs`. Needs the Supabase keys. Answers `fallback_ai_unavailable` until the provider below is plugged in. |
+
+An unknown value in either variable gives `fallback_ai_unavailable`, never demo data under another name. Logs hold only the question id, outcome, latency, tool names, and (in `chat_logs`) the station id: no coordinates, review text, or keys.
+
+### Plugging in SupabaseDataProvider (Backend)
+
+1. Implement `ChatbotDataProvider` from [`src/lib/chatbot/data/provider.ts`](src/lib/chatbot/data/provider.ts) outside `src/lib/chatbot` (that folder never imports Supabase).
+2. Run the shared contract tests against it: call `runProviderContractTests('SupabaseDataProvider', (seed) => ...)` from [`tests/chatbot/provider.contract.ts`](tests/chatbot/provider.contract.ts) in a test file of your own, as [`tests/chatbot/fakeProvider.test.ts`](tests/chatbot/fakeProvider.test.ts) does. The factory gets a `ProviderSeed` and returns a provider over exactly that data.
+3. Return it from `createSupabaseProvider()` in [`src/app/api/chat/deps.ts`](src/app/api/chat/deps.ts). Nothing else changes: the rate limiter and the chat logger are already wired for `CHATBOT_DATA=supabase`.
+
+### Evaluation
+
+```bash
+npm run eval:chatbot -- --mode fake            # 20 cases, no keys, no network
+npm run eval:chatbot -- --mode live --replay   # replays recorded Groq answers, no key needed
+npm run eval:chatbot -- --mode live --only nw-manggarai --record   # real Groq, saves answers
+```
+
+The cases are in [`docs/eval/sample_questions.json`](docs/eval/sample_questions.json): 3 per quick message plus no report in 7 days, unknown station, no schedule, AI unavailable, and a prompt injection inside a review. The pass bar is at least 18 of 20 and zero invented facts. Live runs spend the free Groq quota (8K tokens per minute, about two cases per minute; a full run uses about 70K of the 200K tokens per day), so keep them small; the script waits and retries on a 429. Results and known gaps: [`docs/eval/README.md`](docs/eval/README.md).

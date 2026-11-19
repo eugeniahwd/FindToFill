@@ -1,0 +1,11 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_32f2abec-b412-4b78-a97a-d3ce4ba4c8c6",
+      "name": "search_reviews",
+      "args": {
+        "station_id": "station-sudirman"
+      }
+    }
+  ]
+}

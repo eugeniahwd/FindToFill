@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_c1c09b63-f46a-4783-bdc8-70d6970857ef",
+      "name": "get_nearest_facility",
+      "args": {
+        "limit": 3,
+        "station_id": "station-sudirman",
+        "type": "water"
+      }
+    }
+  ]
+}

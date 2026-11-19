@@ -1,0 +1,14 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_4cfa3ee0-0b50-4bd8-8e3b-aec253c12048",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-manggarai-charging-lounge",
+          "fac-manggarai-charging-p7-8"
+        ]
+      }
+    }
+  ]
+}

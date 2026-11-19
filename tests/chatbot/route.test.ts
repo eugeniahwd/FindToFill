@@ -34,22 +34,33 @@ async function send(
   return { status: res.status, headers: res.headers, data: (await res.json()) as ChatResponse };
 }
 
-const originalMode = process.env.CHATBOT_MODE;
+const ENV_KEYS = ['CHATBOT_MODE', 'CHATBOT_DATA', 'GROQ_API_KEY', 'GROQ_MODEL'] as const;
+const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 let warnSpy: jest.SpyInstance;
+let infoSpy: jest.SpyInstance;
+let errorSpy: jest.SpyInstance;
 
 beforeEach(() => {
-  delete process.env.CHATBOT_MODE;
-  // The route logs rejected field paths; keep test output quiet and let tests inspect the log.
+  for (const key of ENV_KEYS) delete process.env[key];
+  // The route logs rejected field paths and one line per request; keep test output quiet and
+  // let tests inspect the logs.
   warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+  errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 });
 
 afterEach(() => {
   warnSpy.mockRestore();
+  infoSpy.mockRestore();
+  errorSpy.mockRestore();
 });
 
 afterAll(() => {
-  if (originalMode === undefined) delete process.env.CHATBOT_MODE;
-  else process.env.CHATBOT_MODE = originalMode;
+  for (const key of ENV_KEYS) {
+    const value = originalEnv[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
 });
 
 describe('POST /api/chat in stub mode (the default)', () => {
@@ -243,19 +254,84 @@ describe('POST /api/chat in stub mode (the default)', () => {
   });
 });
 
-describe('POST /api/chat in modes that are not built yet', () => {
-  it.each(['fake', 'live', 'not-a-mode'])(
-    'answers fallback_ai_unavailable with HTTP 200 for CHATBOT_MODE=%s',
-    async (mode) => {
-      process.env.CHATBOT_MODE = mode;
-      const { status, data } = await send({ quickMessageId: 'nearest_water', ...STATION });
+describe('POST /api/chat in fake mode (orchestrator, FakeLLMClient, demo data)', () => {
+  beforeEach(() => {
+    process.env.CHATBOT_MODE = 'fake';
+  });
 
-      expect(status).toBe(200);
-      expect(data.outcome).toBe('fallback_ai_unavailable');
-      expect(data.message).toBe(FALLBACK_MESSAGES.aiUnavailable);
-      expect(data.cards).toEqual([]);
-    },
-  );
+  it('answers nearest_water at Manggarai from the demo data (docs/AI_TRACK.md §10)', async () => {
+    const { status, data } = await send({ quickMessageId: 'nearest_water', ...STATION });
+
+    expect(status).toBe(200);
+    expect(data.outcome).toBe('answered');
+    expect(data.message).toBe(
+      'Di Stasiun Manggarai, dispenser air terdekat yang tersedia ada di Water Station, ' +
+        'Platform 3, perkiraan 45 m dari titik tengah stasiun. Laporan terakhir 5 menit lalu.',
+    );
+    expect(data.cards.map((card) => card.facilityId)).toEqual(['fac-manggarai-water-p3']);
+    expect(data.cards[0]).toMatchObject({ status: 'available', distanceIsApproximate: true });
+    expect(data.detectedStation).toEqual({
+      id: 'station-manggarai',
+      name: 'Manggarai',
+      source: 'manual',
+      needsConfirmation: false,
+    });
+  });
+
+  it.each(QUICK_MESSAGE_IDS)('answers %s with HTTP 200 inside the contract limits', async (id) => {
+    const { status, data } = await send({ quickMessageId: id, ...STATION });
+
+    expect(status).toBe(200);
+    expect(data.outcome).toBe('answered');
+    expect(data.message.length).toBeLessThanOrEqual(MAX_MESSAGE_CHARS);
+    expect(data.cards.length).toBeLessThanOrEqual(MAX_CARDS);
+    expect(data.scheduleReminder).toBe(id === 'time_to_refill');
+  });
+
+  it('asks for a station, without a model call, when there is no stationId', async () => {
+    const { status, data } = await send({ quickMessageId: 'nearest_water' });
+
+    expect(status).toBe(200);
+    expect(data.outcome).toBe('fallback_no_data');
+    expect(data.needsStationSelection).toBe(true);
+    expect(data.message).toBe(FALLBACK_MESSAGES.noLocation);
+  });
+
+  it('answers the no-data fallback for a station outside the pilot', async () => {
+    const { status, data } = await send({ quickMessageId: 'nearest_water', stationId: 'bogor' });
+
+    expect(status).toBe(200);
+    expect(data.outcome).toBe('fallback_no_data');
+    expect(data.needsStationSelection).toBe(true);
+  });
+
+  it('logs one line per request with the outcome and tools, never the station or session', async () => {
+    const sessionId = '3f6c2a8e-1b4d-4c9a-9e2f-7a5b8c1d0e4f';
+    await send({ quickMessageId: 'nearest_water', ...STATION, sessionId });
+
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    const line = String(infoSpy.mock.calls[0][0]);
+    expect(line).toMatch(/^\[chat\] nearest_water answered \d+ms tools=get_user_location,/);
+    expect(line).not.toContain(sessionId);
+    expect(line).not.toContain('station-manggarai');
+  });
+});
+
+describe('POST /api/chat without a working answerer', () => {
+  it.each([
+    ['CHATBOT_MODE=live without GROQ_API_KEY', { CHATBOT_MODE: 'live', GROQ_MODEL: 'm' }],
+    ['CHATBOT_MODE=live without GROQ_MODEL', { CHATBOT_MODE: 'live', GROQ_API_KEY: 'k' }],
+    ['an unknown CHATBOT_MODE', { CHATBOT_MODE: 'not-a-mode' }],
+    ['an unknown CHATBOT_DATA', { CHATBOT_MODE: 'fake', CHATBOT_DATA: 'not-a-source' }],
+  ])('answers fallback_ai_unavailable with HTTP 200 for %s', async (_case, env) => {
+    Object.assign(process.env, env);
+    const { status, data } = await send({ quickMessageId: 'nearest_water', ...STATION });
+
+    expect(status).toBe(200);
+    expect(data.outcome).toBe('fallback_ai_unavailable');
+    expect(data.message).toBe(FALLBACK_MESSAGES.aiUnavailable);
+    expect(data.cards).toEqual([]);
+  });
 });
 
 describe('POST /api/chat on an unexpected error', () => {
@@ -284,6 +360,8 @@ describe('POST /api/chat on an unexpected error', () => {
       expect(data.outcome).toBe('fallback_ai_unavailable');
       expect(data.message).toBe(FALLBACK_MESSAGES.aiUnavailable);
       expect(JSON.stringify(data)).not.toContain('internal detail');
+      expect(errorSpy).toHaveBeenCalledWith('[chat] 500: Error');
+      expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('internal detail');
     });
   });
 });

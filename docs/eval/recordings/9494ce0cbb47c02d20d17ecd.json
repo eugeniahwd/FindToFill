@@ -1,0 +1,12 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_6e0eaeb8-3c38-4b4c-b39c-32f2787a14ee",
+      "name": "get_next_train",
+      "args": {
+        "station_id": "station-manggarai",
+        "walk_time_min": 1
+      }
+    }
+  ]
+}
