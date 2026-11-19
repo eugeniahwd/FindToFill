@@ -1,6 +1,12 @@
 # Chatbot evaluation
 
-`docs/eval/sample_questions.json` holds 20 cases (docs/AI_TRACK.md §15): 3 per quick message, plus no report in 7 days, a station outside the pilot, no schedule, the model unavailable, and a prompt injection inside a review. All cases run on the demo data in `src/lib/chatbot/data/fakeData.ts`, so the right answer is known. The pass bar is at least 18 of 20 with zero invented facts.
+`docs/eval/sample_questions.json` holds 24 cases: the 20 from docs/AI_TRACK.md §15 (3 per quick message, plus no report in 7 days, a station outside the pilot, no schedule, the model unavailable, and a prompt injection inside a review) and 4 GPS cases added on 2026-11-19, when the request started carrying the user's position:
+
+- `gps-nw-near-exit-a` and `gps-tr-near-exit-a`: the user stands next to Exit A at Manggarai. From there the nearest dispenser is the empty Exit A one, and the available Platform 3 dispenser is about 160 m (3 minutes) away, so the order and the walk time differ from the station-center answers.
+- `gps-outside-pilot-area`: the user is in Depok, farther than 800 m from every pilot station.
+- `gps-far-picked-station`: the user is in Depok but picked Manggarai, so distances come from the station center.
+
+All cases run on the demo data in `src/lib/chatbot/data/fakeData.ts`, so the right answer is known. The pass bar is the §15 share, 90% (22 of 24), with zero invented facts.
 
 A case passes when the outcome, the cards, the required facts, the banned phrases, and the tools called all match. A fact matches when any of its `|` alternatives appears in the message. "Invented facts" counts what the answer checks in `src/lib/chatbot/validation.ts` flag in the final message: a number no tool returned, a facility id no tool returned, a working claim about a facility that is not available, or a refill verdict that contradicts the train check.
 
@@ -24,6 +30,8 @@ Other options: `--limit N`, `--verbose` (print every message), `--cases <file>`,
 | live, first 6 cases, before the fixes below | 4/6 | 0 | 4/6 | 2.2 s / 6.8 s |
 | live, all 20 cases, full run | 14/20 | 0 counted, 1 missed (see below) | 18/18 | 1.7 s / 2.8 s |
 | live replay of the final recordings, with the fixes | 20/20 | 0 | 15/18 | (replay, not a latency measurement) |
+| fake, with the 4 GPS cases | 24/24 | 0 | (template) | about 1 ms |
+| live replay, with the 4 GPS cases (2 recorded live) | 24/24 | 0 | 17/21 | (replay) |
 
 Latency is the time `handleChat` takes, measured in the live runs. The two fallback cases do not call the model and are counted with about 0 ms. `time_to_refill` needs one model call more than the other questions and took 2.4 to 4.9 s, so it is above the 3-second target on its own.
 
@@ -33,10 +41,12 @@ Latency is the time `handleChat` takes, measured in the live runs. The two fallb
 2. **The model gave a wrong refill verdict.** At 08:08 (train in 2 minutes, 3 needed) it answered "Anda dapat mengisi air sebelum kereta berikutnya". It happened in two separate runs. The checks did not catch it then, so the full run's "0 invented facts" missed it. Now `time_to_refill` answers must state the same verdict as `time_check.enough_time`, or say that the schedule is missing. Otherwise the deterministic answer is used. This replaced 3 of the 4 `time_to_refill`-type answers in the final recordings. A train check that the model requested with a wrong walk time is not trusted either.
 3. **A facility answer without cards.** In the no-reports case the model chose no facility ids. Such an answer now gets the cards the deterministic answer would show.
 4. **Review answers said "Laporan terakhir dibuat 0 hari yang lalu".** Prompt rule 8 (report times) now covers facility statuses only. A new rule 13 covers reviews.
-5. **Scorer changes after the first full run.** gpt-oss writes non-breaking spaces ("2 menit") and non-breaking hyphens ("rata-rata"), so the scorer normalizes them. Two expectations were loosened to accept correct wording: `fw-tebet` accepts "Water Station" (the only one at Tebet is the available Platform 2 dispenser), and `tr-manggarai-enough` accepts "bisa isi" or "dapat mengisi". `facility_working` facts accept either the count or the names of the available facilities.
+5. **With GPS, the model took the walk time of the wrong dispenser.** In `gps-tr-near-exit-a` it called `get_next_train` with `walk_time_min` 1, the walk to the nearest dispenser (empty), not to the nearest available one (3 minutes). The server did not trust that train check, ran it again with 3 minutes, and answered "butuh sekitar 7 menit, jadi masih sempat" from the template. The model's next call then failed with Groq's 400, which record mode now saves too, so the replay follows the same path.
+6. **Scorer changes after the first full run.** gpt-oss writes non-breaking spaces ("2 menit") and non-breaking hyphens ("rata-rata"), so the scorer normalizes them. Two expectations were loosened to accept correct wording: `fw-tebet` accepts "Water Station" (the only one at Tebet is the available Platform 2 dispenser), and `tr-manggarai-enough` accepts "bisa isi" or "dapat mengisi". `facility_working` facts accept either the count or the names of the available facilities.
 
 ## Known gaps
 
 - The model often leaves out the station name, "perkiraan" for distances, or the report time (prompt rules 6 and 8). The answer checks do not enforce these. The cards always show the distance as approximate and show the report time.
-- `time_to_refill` is above 3 seconds, and its verdict often has to be replaced. A clearer prompt rule 9 ("enough_time true means masih sempat, false means waktunya tidak cukup") would likely help. It was not tried because it requires recording all 20 cases again.
-- Results come from the demo data. Rerun the eval once `CHATBOT_DATA=supabase` has real data, with new expected facts.
+- `time_to_refill` is above 3 seconds, and its verdict often has to be replaced. A clearer prompt rule 9 ("enough_time true means masih sempat, false means waktunya tidak cukup", and "use the walk time of the nearest available dispenser") would likely help. It was not tried because it requires recording all 24 cases again.
+- The GPS cases use one position at Manggarai. Indoors, phone GPS can be off by tens of meters, so the user-position distances are only as good as the phone's fix.
+- Results come from the chatbot's own demo data. Rerun the eval once `CHATBOT_DATA=supabase` reads the team's seed data, with new expected facts.
