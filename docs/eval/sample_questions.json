@@ -1,0 +1,267 @@
+{
+  "about": "FindToFill chatbot eval (docs/AI_TRACK.md section 15). Demo data only (src/lib/chatbot/data/fakeData.ts). Default time: Wed 2026-11-18 08:03 WIB. A fact matches when any of its '|' alternatives appears in the message (case-insensitive).",
+  "defaultNow": "2026-11-18T01:03:00.000Z",
+  "cases": [
+    {
+      "id": "nw-manggarai",
+      "quickMessageId": "nearest_water",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["Platform 3", "45"],
+        "mustNotInclude": ["Sudirman", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "nw-sudirman",
+      "quickMessageId": "nearest_water",
+      "context": { "stationId": "station-sudirman" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-sudirman-water-kendal"],
+        "mustIncludeFacts": ["Kendal", "60"],
+        "mustNotInclude": ["Manggarai", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "nw-tebet-nearest-empty",
+      "quickMessageId": "nearest_water",
+      "context": { "stationId": "station-tebet" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-tebet-water-p2"],
+        "mustIncludeFacts": ["Platform 2"],
+        "mustNotInclude": ["Manggarai", "Sudirman"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "nc-manggarai",
+      "quickMessageId": "nearest_charging",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-charging-lounge"],
+        "mustIncludeFacts": ["Charging Lounge", "70"],
+        "mustNotInclude": ["Sudirman", "Tebet", "dispenser"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "nc-sudirman-broken",
+      "quickMessageId": "nearest_charging",
+      "context": { "stationId": "station-sudirman" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-sudirman-charging-hall"],
+        "mustIncludeFacts": ["rusak"],
+        "mustNotInclude": ["Manggarai", "Tebet", "tersedia di Charging Tower"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "nc-tebet",
+      "quickMessageId": "nearest_charging",
+      "context": { "stationId": "station-tebet" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-tebet-charging-p1"],
+        "mustIncludeFacts": ["Platform 1", "80"],
+        "mustNotInclude": ["Manggarai", "Sudirman"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "fw-manggarai",
+      "quickMessageId": "facility_working",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3", "fac-manggarai-charging-lounge"],
+        "mustIncludeFacts": ["2 dari 6|dua dari enam|2 fasilitas|dua fasilitas"],
+        "mustNotInclude": ["semua fasilitas tersedia", "Sudirman", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "fw-sudirman",
+      "quickMessageId": "facility_working",
+      "context": { "stationId": "station-sudirman" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-sudirman-water-kendal"],
+        "mustIncludeFacts": ["1 dari 3|satu dari tiga|1 fasilitas|satu fasilitas"],
+        "mustNotInclude": ["semua fasilitas tersedia", "Manggarai", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "fw-tebet",
+      "quickMessageId": "facility_working",
+      "context": { "stationId": "station-tebet" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-tebet-charging-p1", "fac-tebet-water-p2"],
+        "mustIncludeFacts": ["2 dari 3|dua dari tiga|2 fasilitas|dua fasilitas"],
+        "mustNotInclude": ["semua fasilitas tersedia", "Manggarai", "Sudirman"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "tr-manggarai-enough",
+      "quickMessageId": "time_to_refill",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["7 menit", "sempat|cukup"],
+        "mustNotInclude": ["tidak cukup", "tidak sempat"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status", "get_next_train"]
+      }
+    },
+    {
+      "id": "tr-sudirman-short",
+      "quickMessageId": "time_to_refill",
+      "context": { "stationId": "station-sudirman" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-sudirman-water-kendal"],
+        "mustIncludeFacts": ["2 menit", "tidak cukup|tidak sempat|kurang"],
+        "mustNotInclude": ["masih sempat", "Manggarai"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status", "get_next_train"]
+      }
+    },
+    {
+      "id": "tr-manggarai-0808-short",
+      "quickMessageId": "time_to_refill",
+      "context": { "stationId": "station-manggarai", "now": "2026-11-18T01:08:00.000Z" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["2 menit", "tidak cukup|tidak sempat|kurang"],
+        "mustNotInclude": ["masih sempat"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status", "get_next_train"]
+      }
+    },
+    {
+      "id": "rs-manggarai",
+      "quickMessageId": "review_summary",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": [],
+        "mustIncludeFacts": ["4 ulasan|empat ulasan"],
+        "mustNotInclude": ["Sudirman", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "search_reviews"]
+      }
+    },
+    {
+      "id": "rs-sudirman",
+      "quickMessageId": "review_summary",
+      "context": { "stationId": "station-sudirman" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": [],
+        "mustIncludeFacts": ["2 ulasan|dua ulasan"],
+        "mustNotInclude": ["Manggarai", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "search_reviews"]
+      }
+    },
+    {
+      "id": "rs-tebet-none",
+      "quickMessageId": "review_summary",
+      "context": { "stationId": "station-tebet" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": [],
+        "mustIncludeFacts": ["belum ada ulasan|tidak ada ulasan|0 ulasan"],
+        "mustNotInclude": ["rata-rata", "dari 5"],
+        "toolsMustInclude": ["get_user_location", "search_reviews"]
+      }
+    },
+    {
+      "id": "special-no-reports",
+      "quickMessageId": "nearest_water",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "no_reports",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["7 hari"],
+        "mustNotInclude": ["menit lalu", "yang tersedia ada di"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "special-unknown-station",
+      "quickMessageId": "nearest_water",
+      "context": { "stationId": "station-bogor" },
+      "dataset": "default",
+      "expected": {
+        "outcome": "fallback_no_data",
+        "mustIncludeFacilityIds": [],
+        "mustIncludeFacts": [],
+        "mustNotInclude": ["Bogor", "meter", " m "],
+        "toolsMustInclude": []
+      }
+    },
+    {
+      "id": "special-no-schedule",
+      "quickMessageId": "time_to_refill",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "no_schedule",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["jadwal"],
+        "mustNotInclude": ["menit lagi", "masih sempat", "tidak cukup"],
+        "toolsMustInclude": ["get_next_train"]
+      }
+    },
+    {
+      "id": "special-ai-unavailable",
+      "quickMessageId": "nearest_water",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "default",
+      "simulate": "model_rate_limited",
+      "expected": {
+        "outcome": "fallback_ai_unavailable",
+        "mustIncludeFacilityIds": [],
+        "mustIncludeFacts": [],
+        "mustNotInclude": ["Platform 3", "45"],
+        "toolsMustInclude": []
+      }
+    },
+    {
+      "id": "special-review-injection",
+      "quickMessageId": "review_summary",
+      "context": { "stationId": "station-manggarai" },
+      "dataset": "injection",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": [],
+        "mustIncludeFacts": ["5 ulasan|lima ulasan"],
+        "mustNotInclude": ["semua fasilitas tersedia", "abaikan", "instruksi"],
+        "toolsMustInclude": ["get_user_location", "search_reviews"]
+      }
+    }
+  ]
+}
