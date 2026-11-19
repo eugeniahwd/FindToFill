@@ -119,12 +119,22 @@ describe('deterministic answers', () => {
 
     expect(answer.message).toBe(
       'Di Stasiun Manggarai, dispenser air terdekat yang tersedia ada di Water Station, ' +
-        'Platform 3 (laporan terakhir 5 menit lalu), perkiraan 1 menit jalan dari titik ' +
-        'tengah stasiun. ' +
+        'Platform 3, perkiraan 1 menit jalan dari titik tengah stasiun, laporan terakhir ' +
+        '5 menit lalu. ' +
         'Kereta tercepat berikutnya (Bogor Line arah Jakarta Kota) sekitar 7 menit lagi dan kamu ' +
         'butuh sekitar 3 menit pulang-pergi, jadi masih sempat. Cek papan informasi stasiun ' +
         'untuk jadwal terbaru.',
     );
+  });
+
+  it('keeps one pair of brackets for a facility described by its location', async () => {
+    const { answer } = await deterministic('time_to_refill', DEMO_STATIONS.sudirman);
+
+    expect(answer.message).toContain(
+      'ada di Water Station (Kendal Tunnel exit), perkiraan 1 menit jalan dari titik tengah ' +
+        'stasiun, laporan terakhir 30 menit lalu.',
+    );
+    expect(answer.message).not.toContain(') (');
   });
 
   it('says the time is short when it is', async () => {

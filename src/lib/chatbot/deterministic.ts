@@ -119,10 +119,11 @@ function refillAnswer(outputs: ToolOutputs, station: string): ComposedAnswer {
     };
   }
 
+  // The report phrase goes last: place() can already end in brackets ("Water Station (Exit A)").
   const first =
-    `Di ${station}, dispenser air terdekat yang tersedia ada di ${place(available)} ` +
-    `(${reportPhrase(statusOf(outputs, available))}), perkiraan ${available.walk_time_min} menit ` +
-    'jalan dari titik tengah stasiun.';
+    `Di ${station}, dispenser air terdekat yang tersedia ada di ${place(available)}, ` +
+    `perkiraan ${available.walk_time_min} menit jalan dari titik tengah stasiun, ` +
+    `${reportPhrase(statusOf(outputs, available))}.`;
   const trains = outputs.trains;
   const soonest = trains?.departures[0];
   let rest: string;
