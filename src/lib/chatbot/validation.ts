@@ -176,6 +176,8 @@ function claimsWorking(message: string, evidence: Evidence): boolean {
     if (!claimsInClause(clause)) return false;
     // "2 dari 6 fasilitas berstatus tersedia" is a count, not a claim about one facility.
     if (/\d+\s+dari\s+\d+/.test(clause)) return false;
+    // No status was looked up (for example a review summary): a working claim has no source.
+    if (statuses.length === 0) return true;
     if (noneAvailable) return true;
     if (notAll && /\bsemua\b/i.test(clause)) return true;
     for (const [id, facility] of evidence.facilities) {
