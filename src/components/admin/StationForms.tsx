@@ -81,6 +81,73 @@ export function StationCreateSheet({ onClose, onCreated }: { onClose: () => void
   );
 }
 
+/**
+ * Edit a station's name, lines, and center (PATCH /api/admin/stations/:id).
+ * The pilot flag is left out on purpose: it changes which stations the chatbot knows.
+ */
+export function StationEditSheet({
+  station,
+  onClose,
+  onSaved,
+}: {
+  station: Station;
+  onClose: () => void;
+  onSaved: (station: Station) => void;
+}) {
+  const { showToast } = useToast();
+  const [name, setName] = useState(station.name);
+  const [lines, setLines] = useState(station.lines.join(', '));
+  const [latitude, setLatitude] = useState(String(station.latitude));
+  const [longitude, setLongitude] = useState(String(station.longitude));
+  const [isSaving, setIsSaving] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const lat = toNumber(latitude);
+    const lng = toNumber(longitude);
+    if (!validCoordinates(lat, lng)) {
+      showToast('Isi latitude dan longitude dengan angka, misalnya -6.2266 dan 106.8582.', 'error');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const updated = await stationService.updateStation(station.id, {
+        name,
+        lines: lines.split(',').map((l) => l.trim()).filter(Boolean),
+        latitude: lat as number,
+        longitude: lng as number,
+      });
+      showToast(`Stasiun ${updated.name} diperbarui.`, 'success');
+      onSaved(updated);
+    } catch (err) {
+      showToast(adminErrorMessage(err, 'Gagal menyimpan stasiun.'), 'error');
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <BottomSheet isOpen onClose={onClose} title="Edit Stasiun" description={station.name}>
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <FormField id="edit-st-name" label="Nama stasiun">
+          <input id="edit-st-name" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        </FormField>
+        <FormField id="edit-st-lines" label="Jalur KRL" hint="Pisahkan dengan koma, misalnya: Bogor Line, Cikarang Line">
+          <input id="edit-st-lines" value={lines} onChange={(e) => setLines(e.target.value)} className={inputClass} />
+        </FormField>
+        <div className="grid grid-cols-2 gap-2">
+          <FormField id="edit-st-lat" label="Latitude">
+            <input id="edit-st-lat" inputMode="decimal" required value={latitude} onChange={(e) => setLatitude(e.target.value)} className={inputClass} />
+          </FormField>
+          <FormField id="edit-st-lng" label="Longitude">
+            <input id="edit-st-lng" inputMode="decimal" required value={longitude} onChange={(e) => setLongitude(e.target.value)} className={inputClass} />
+          </FormField>
+        </div>
+        <SubmitButton isSaving={isSaving} label="Simpan Perubahan" />
+      </form>
+    </BottomSheet>
+  );
+}
+
 /** Add a facility to a station. Coordinates start at the station center; layout position is optional. */
 export function FacilityCreateSheet({
   station,
@@ -198,7 +265,11 @@ export function FacilityCreateSheet({
   );
 }
 
-/** Edit name, platform, and location detail of an existing facility (PATCH /api/admin/facilities/:id). */
+/**
+ * Edit name, platform, location detail, and the active switch of a facility
+ * (PATCH /api/admin/facilities/:id). An inactive facility disappears from public pages and
+ * the chatbot but stays in the admin list, so it can be switched back on.
+ */
 export function FacilityEditSheet({
   facility,
   onClose,
@@ -212,13 +283,14 @@ export function FacilityEditSheet({
   const [name, setName] = useState(facility.name);
   const [platform, setPlatform] = useState(facility.platform ?? '');
   const [locationDetail, setLocationDetail] = useState(facility.locationDetail ?? '');
+  const [isActive, setIsActive] = useState(facility.isActive);
   const [isSaving, setIsSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const updated = await stationService.updateFacility(facility.id, { name, platform, locationDetail });
+      const updated = await stationService.updateFacility(facility.id, { name, platform, locationDetail, isActive });
       showToast('Data fasilitas diperbarui.', 'success');
       onSaved(updated);
     } catch (err) {
@@ -239,6 +311,22 @@ export function FacilityEditSheet({
         <FormField id="edit-fac-loc" label="Detail lokasi">
           <input id="edit-fac-loc" maxLength={300} value={locationDetail} onChange={(e) => setLocationDetail(e.target.value)} className={inputClass} />
         </FormField>
+        <label htmlFor="edit-fac-active" className="min-touch-target flex items-start gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
+          <input
+            id="edit-fac-active"
+            type="checkbox"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="mt-0.5 h-5 w-5 accent-[#00628C] shrink-0"
+          />
+          <span className="text-xs text-slate-700">
+            <span className="block font-semibold">Fasilitas aktif</span>
+            <span className="block text-slate-500 mt-0.5">
+              Matikan jika fasilitas dibongkar atau tidak ada lagi. Fasilitas nonaktif tidak tampil di aplikasi dan chatbot, tapi
+              tetap ada di daftar admin dan bisa diaktifkan lagi.
+            </span>
+          </span>
+        </label>
         <SubmitButton isSaving={isSaving} label="Simpan Perubahan" />
       </form>
     </BottomSheet>

@@ -5,8 +5,10 @@ import { adminService } from '@/lib/services/adminService';
 import { adminErrorMessage } from '@/lib/admin/messages';
 import { ApiRequestError } from '@/lib/services/apiClient';
 import { ReportsModeration } from '@/components/admin/ReportsModeration';
+import { StationsManager } from '@/components/admin/StationsManager';
+import { stationService } from '@/lib/services/stationService';
 import { ToastProvider } from '@/context/ToastContext';
-import type { ModerationReport, Station } from '@/lib/types';
+import type { FacilityWithStatus, ModerationReport, Station } from '@/lib/types';
 
 const fetchMock = jest.fn();
 const respond = (status: number, body: unknown) =>
@@ -30,6 +32,12 @@ describe('adminService (browser)', () => {
     fetchMock.mockReturnValue(respond(200, { removal }));
     expect(await adminService.removeReview('r1')).toEqual(removal);
     expect(fetchMock.mock.calls[0]).toEqual(['/api/admin/reviews/r1', expect.objectContaining({ method: 'DELETE' })]);
+  });
+
+  it('lists a station facilities from the admin route', async () => {
+    fetchMock.mockReturnValue(respond(200, { facilities: [] }));
+    await adminService.getStationFacilities('s1');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/admin/stations/s1/facilities');
   });
 
   it('adds a departure with POST JSON', async () => {
@@ -103,5 +111,85 @@ describe('ReportsModeration', () => {
     jest.mocked(adminService.getReports).mockRejectedValue(new Error('down'));
     renderTab();
     expect(await screen.findByRole('button', { name: 'Coba lagi' })).toBeInTheDocument();
+  });
+});
+
+describe('StationsManager', () => {
+  const tebet: Station = { id: 's1', name: 'Tebet', lines: ['Bogor Line'], latitude: -6.2266, longitude: 106.8582, isPilot: true };
+  const facility = (id: string, name: string, isActive: boolean): FacilityWithStatus => ({
+    id, stationId: 's1', type: 'water', name, latitude: -6.2266, longitude: 106.8582, isActive,
+    currentStatus: 'unknown', lastReportedAt: null, lastPhotoUrl: null, activeReportCount: 0,
+  });
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    jest.spyOn(adminService, 'getStationFacilities').mockResolvedValue([
+      facility('f1', 'Water Station Platform 2', true),
+      facility('f2', 'Dispenser Lama', false),
+    ]);
+    jest.spyOn(adminService, 'getSchedules').mockResolvedValue([]);
+  });
+
+  const renderTab = (onStationUpdated = jest.fn()) =>
+    render(
+      <ToastProvider>
+        <StationsManager stations={[tebet]} onStationCreated={jest.fn()} onStationUpdated={onStationUpdated} />
+      </ToastProvider>,
+    );
+
+  it('shows inactive facilities with a "Nonaktif" label so they can be switched back on', async () => {
+    renderTab();
+    expect(await screen.findByText('Dispenser Lama')).toBeInTheDocument();
+    expect(screen.getByText('Nonaktif')).toBeInTheDocument();
+    expect(adminService.getStationFacilities).toHaveBeenCalledWith('s1');
+  });
+
+  it('edits a station without touching the pilot flag', async () => {
+    const updated = { ...tebet, name: 'Tebet Baru', lines: ['Bogor Line', 'Cikarang Line'] };
+    jest.spyOn(stationService, 'updateStation').mockResolvedValue(updated);
+    const onStationUpdated = jest.fn();
+    renderTab(onStationUpdated);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit stasiun Tebet' }));
+    const dialog = screen.getByRole('dialog');
+    const nameInput = within(dialog).getByLabelText('Nama stasiun');
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'Tebet Baru');
+    const linesInput = within(dialog).getByLabelText('Jalur KRL');
+    await userEvent.clear(linesInput);
+    await userEvent.type(linesInput, 'Bogor Line, Cikarang Line');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Simpan Perubahan/ }));
+
+    expect(stationService.updateStation).toHaveBeenCalledWith('s1', {
+      name: 'Tebet Baru', lines: ['Bogor Line', 'Cikarang Line'], latitude: -6.2266, longitude: 106.8582,
+    });
+    expect(onStationUpdated).toHaveBeenCalledWith(updated);
+  });
+
+  it('rejects coordinates that are not numbers before calling the API', async () => {
+    jest.spyOn(stationService, 'updateStation');
+    renderTab();
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit stasiun Tebet' }));
+    const lat = within(screen.getByRole('dialog')).getByLabelText('Latitude');
+    await userEvent.clear(lat);
+    await userEvent.type(lat, 'abc');
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Simpan Perubahan/ }));
+
+    expect(await screen.findByText(/Isi latitude dan longitude dengan angka/)).toBeInTheDocument();
+    expect(stationService.updateStation).not.toHaveBeenCalled();
+  });
+
+  it('switches a facility off and reloads the list', async () => {
+    jest.spyOn(stationService, 'updateFacility').mockResolvedValue(facility('f1', 'Water Station Platform 2', false));
+    renderTab();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Water Station Platform 2' }));
+    const toggle = within(screen.getByRole('dialog')).getByRole('checkbox', { name: /Fasilitas aktif/ });
+    expect(toggle).toBeChecked();
+    await userEvent.click(toggle);
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Simpan Perubahan/ }));
+
+    expect(jest.mocked(stationService.updateFacility).mock.calls[0]).toEqual(['f1', expect.objectContaining({ isActive: false })]);
+    expect(adminService.getStationFacilities).toHaveBeenCalledTimes(2);
   });
 });

@@ -106,6 +106,7 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 | `GET /api/admin/reviews?stationId=&limit=` | Admin: recent reviews (removed included), never the embedding |
 | `DELETE /api/admin/reports/:id`, `DELETE /api/admin/reviews/:id` | Admin **Remove** = soft delete (`removed_at`, `removed_by`); safe to repeat. Removed reports stop counting for the facility status; removed reviews leave public lists and the chatbot search. No restore (SPEC 4.7) |
 | `POST /api/admin/stations`, `POST /api/admin/facilities` | Admin adds a station or facility (new rows are not demo data) |
+| `GET /api/admin/stations/:id/facilities` | Admin: every facility of a station with its status, **inactive ones included** (listed last), so a switched-off facility can be turned back on. Public routes and the chatbot only see active facilities |
 | `GET`, `POST /api/admin/stations/:id/schedules`, `DELETE /api/admin/schedules/:id` | Admin timetable: list (optional `dayType`), add one departure `{ line, direction, dayType, departureTime: "HH:MM" }`, delete one. Bulk changes: `schedules.csv` + `npm run db:seed`. Layout image upload is on hold |
 | `src/lib/rate-limit.ts` | Sliding-window limits stored in `rate_limit_events` (reports now, chat later) |
 | `src/lib/data/` | Server data access (`stations.ts`, `reviews.ts`, signed photo URLs in `photos.ts`), reusable by the chatbot tools |
