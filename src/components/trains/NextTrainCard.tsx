@@ -94,7 +94,7 @@ export function NextTrainCard({ stationName, now }: NextTrainCardProps) {
               aria-label={`Tampilkan arah ${slide.direction}`}
               aria-current={i === current ? 'true' : undefined}
               onClick={() => show(i)}
-              className="h-11 w-6 flex items-center justify-center"
+              className="h-11 w-11 flex items-center justify-center"
             >
               <span
                 className={`block h-1.5 rounded-full transition-all ${
@@ -121,10 +121,14 @@ const SlideView: React.FC<{ slide: DirectionSlide; stationName: string }> = ({ s
   let leftLabel = '';
   if (train) {
     const time = formatClock(train.stop.minute);
-    eta = train.phase === 'arriving' ? `Tiba sekarang · ${time}` : `±${train.minutesUntil} mnt · ${time}`;
+    const startsHere = train.stop.prev === null;
+    eta =
+      train.phase === 'arriving'
+        ? `${startsHere ? 'Berangkat' : 'Tiba'} sekarang · ${time}`
+        : `±${train.minutesUntil} mnt · ${time}`;
     if (train.phase === 'waiting' && train.stop.prev) {
       leftLabel = `di ${train.stop.prev.name}, berangkat ${formatClock(train.stop.prev.minute)}`;
-    } else if (train.phase === 'origin') {
+    } else if (startsHere) {
       leftLabel = `berangkat dari ${stationName}`;
     } else {
       leftLabel = train.stop.prev?.name ?? '';
@@ -156,6 +160,7 @@ const SlideView: React.FC<{ slide: DirectionSlide; stationName: string }> = ({ s
             <div className="absolute left-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-[#011638] bg-white" />
             <div className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full bg-[#011638]" />
             <div
+              data-testid="train-icon"
               className="absolute -top-0.5 h-3.5 w-5 rounded-[4px_7px_7px_4px] shadow transition-[left] duration-1000 ease-linear motion-reduce:transition-none"
               style={{ left: `calc(${train.progress * 100}% - ${train.progress * 20}px)`, backgroundColor: color }}
             />

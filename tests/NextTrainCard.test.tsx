@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextTrainCard } from '@/components/trains/NextTrainCard';
 
@@ -45,6 +45,25 @@ describe('NextTrainCard', () => {
       'aria-current',
       'true',
     );
+  });
+
+  it('dot buttons are at least 44 px wide', () => {
+    render(<NextTrainCard stationName="Tebet" now={NOW} />);
+    for (const dot of screen.getAllByRole('button', { name: /^Tampilkan arah/ })) {
+      expect(dot).toHaveClass('w-11', 'h-11');
+    }
+  });
+
+  it('a train that starts here waits at the station end and then departs', () => {
+    const group = () => screen.getByRole('group', { name: 'Kereta berikutnya arah Tanah Abang/Kampung Bandan' });
+    // 04:30 WIB: KA 5703 (Mri-Ak) leaves Manggarai at 04.37.
+    const { rerender } = render(<NextTrainCard stationName="Manggarai" now={new Date('2026-12-02T21:30:00Z')} />);
+    expect(group()).toHaveTextContent('berangkat dari Manggarai');
+    expect(within(group()).getByTestId('train-icon').style.left).toContain('100%');
+    // 04:37:20 WIB: departing now, not arriving.
+    rerender(<NextTrainCard stationName="Manggarai" now={new Date('2026-12-02T21:37:20Z')} />);
+    expect(group()).toHaveTextContent('Berangkat sekarang · 04.37');
+    expect(group()).not.toHaveTextContent('Tiba sekarang');
   });
 
   it('works when storage throws', async () => {

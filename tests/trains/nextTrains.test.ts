@@ -82,9 +82,9 @@ describe('directionSlides', () => {
     expect(later?.train?.stop.train).toBe('1127');
   });
 
-  it('origin train has no moving icon', () => {
+  it('origin train stays still at the station point', () => {
     const s = slide('Tebet', weekday(270), 'Bogor Line|Manggarai/Jakarta Kota', [stop({ prev: null })]);
-    expect(s?.train).toMatchObject({ phase: 'origin', progress: 0 });
+    expect(s?.train).toMatchObject({ phase: 'origin', progress: 1 });
   });
 
   it('weekday-only trains are skipped on weekends', () => {

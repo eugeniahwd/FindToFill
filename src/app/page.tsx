@@ -10,13 +10,15 @@ import { NextTrainCard } from '@/components/trains/NextTrainCard';
 import { useNow } from '@/components/trains/useNow';
 import { serviceClock } from '@/lib/trains/clock';
 import { mapTrains } from '@/lib/trains/mapTrains';
+import { directionSlides } from '@/lib/trains/nextTrains';
 import { useLocation } from '@/context/LocationContext';
 import { stationService } from '@/lib/services/stationService';
 import { FacilityWithStatus } from '@/lib/types';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
-const HOME_MAP_ZOOM = 18;
+// About 1 km across on a phone: the station, its facilities, and trains on the neighbouring track.
+const HOME_MAP_ZOOM = 16;
 
 export default function HomePage() {
   const { stations, selectedStation, selectStation, coords } = useLocation();
@@ -48,7 +50,10 @@ export default function HomePage() {
 
   // Schedule-estimated trains around the selected station, refreshed every few seconds.
   const now = useNow();
-  const trains = mapTrains(selectedStation.name, serviceClock(now));
+  const clock = serviceClock(now);
+  const trains = mapTrains(selectedStation.name, clock);
+  // Keep the note steady for stations with a timetable instead of popping in with each train.
+  const hasTrainData = directionSlides(selectedStation.name, clock).length > 0;
 
   return (
     <div className="fixed inset-0 z-0 w-full max-w-md mx-auto map-under-nav">
@@ -75,7 +80,7 @@ export default function HomePage() {
         <StationHeader />
         <NextTrainCard stationName={selectedStation.name} />
         <FacilityLoadStatus state={loadState} isEmpty={facilities.length === 0} onRetry={retry} />
-        {trains.length > 0 && (
+        {hasTrainData && (
           <div role="note" className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 shadow-md text-xs font-medium text-slate-600">
             <span className="h-2 w-2 rounded-full bg-[#00628C]" aria-hidden="true" />
             <span>Posisi kereta: perkiraan dari jadwal</span>

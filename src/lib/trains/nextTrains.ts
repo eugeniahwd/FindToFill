@@ -9,7 +9,7 @@ export type TrainPhase = 'waiting' | 'moving' | 'arriving' | 'origin';
 export interface TrainState {
   stop: TimetableStop;
   minutesUntil: number;
-  /** 0 at the previous station, 1 at this station. */
+  /** 0 at the previous station, 1 at this station (also for trains that start here). */
   progress: number;
   phase: TrainPhase;
 }
@@ -32,7 +32,8 @@ export function trainState(stop: TimetableStop, now: number): TrainState {
   const left = stop.minute - now;
   const minutesUntil = Math.max(0, Math.ceil(left));
   if (left <= 0) return { stop, minutesUntil, progress: 1, phase: 'arriving' };
-  if (stop.prev === null) return { stop, minutesUntil, progress: 0, phase: 'origin' };
+  // Starts here: the train stands at this station until it leaves.
+  if (stop.prev === null) return { stop, minutesUntil, progress: 1, phase: 'origin' };
   if (now < stop.prev.minute) return { stop, minutesUntil, progress: 0, phase: 'waiting' };
   const progress = clamp01((now - stop.prev.minute) / (stop.minute - stop.prev.minute));
   return { stop, minutesUntil, progress, phase: 'moving' };
