@@ -68,10 +68,12 @@ export default function ChatbotPage() {
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
+  // Scroll the message list only (scrollIntoView would also scroll the page and hide the header).
   useEffect(() => {
-    scrollRef.current?.scrollIntoView?.({ behavior: 'smooth' });
+    const list = listRef.current;
+    list?.scrollTo?.({ top: list.scrollHeight, behavior: 'smooth' });
   }, [conversation, isThinking]);
 
   // Tick once a second while rate limited, so the countdown and the buttons update.
@@ -125,9 +127,11 @@ export default function ChatbotPage() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100dvh-4.5rem)] relative overflow-hidden bg-page-tint">
+    // Pinned between the top of the screen and the bottom nav: the page itself never scrolls, only
+    // the message list does, so the header stays visible on phones.
+    <div className="fixed inset-x-0 top-0 bottom-[var(--bottom-nav-height)] z-10 w-full max-w-md mx-auto flex flex-col overflow-hidden bg-page-tint">
       {/* Top Bar with Station Chip & Change Button */}
-      <header className="p-3 bg-white border-b border-slate-200 shadow-xs flex items-center justify-between shrink-0">
+      <header className="p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] bg-white border-b border-slate-200 shadow-xs flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-full bg-[#011638] text-[#FFD233] flex items-center justify-center shrink-0">
             <Bot size={18} aria-hidden="true" />
@@ -154,7 +158,12 @@ export default function ChatbotPage() {
       </header>
 
       {/* Chat Messages Stream */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5" aria-live="polite">
+      <div
+        ref={listRef}
+        role="log"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 flex flex-col gap-3.5"
+        aria-live="polite"
+      >
         {conversation.map((turn) => {
           const isBot = turn.sender === 'bot';
           const station = turn.detectedStation;
@@ -250,8 +259,6 @@ export default function ChatbotPage() {
             <span>Sedang memeriksa data stasiun...</span>
           </div>
         )}
-
-        <div ref={scrollRef} />
       </div>
 
       {/* Quick-message buttons only (no free text input) */}

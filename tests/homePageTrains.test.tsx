@@ -54,17 +54,17 @@ describe('home page trains', () => {
     expect(mapProps.at(-1)?.zoom).toBe(16);
   });
 
-  it('keeps the estimate note visible for a station with a timetable, even with no train running', async () => {
+  it('shows the schedule-estimate note exactly once for a station with a timetable', async () => {
     mockLocation('Tebet');
     render(<HomePage />);
     await act(async () => {});
-    expect(screen.getByText('Posisi kereta: perkiraan dari jadwal')).toBeInTheDocument();
+    expect(screen.getAllByText(/perkiraan dari jadwal/i)).toHaveLength(1);
   });
 
   it('shows no estimate note for a station without timetable', async () => {
     mockLocation('Juanda');
     render(<HomePage />);
     await act(async () => {});
-    expect(screen.queryByText('Posisi kereta: perkiraan dari jadwal')).not.toBeInTheDocument();
+    expect(screen.queryByText(/perkiraan dari jadwal/i)).not.toBeInTheDocument();
   });
 });

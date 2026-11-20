@@ -82,6 +82,20 @@ const waterButton = () => screen.getByRole('button', { name: QUICK_MESSAGES.near
 describe('ChatbotPage', () => {
   beforeEach(() => jest.mocked(chatbotService.ask).mockReset());
 
+  it('scrolls only the message list, so the header never moves off screen', async () => {
+    const scrollIntoView = jest.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mockLocation();
+    reply(200);
+    render(<ChatbotPage />);
+
+    await userEvent.click(waterButton());
+    await screen.findByText(/Dispenser terdekat/);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByRole('log')).toBeInTheDocument();
+    expect(screen.getByText('Asisten Stasiun').closest('header')).toHaveClass('shrink-0');
+  });
+
   it('shows every quick message from the chatbot module', () => {
     mockLocation();
     render(<ChatbotPage />);
