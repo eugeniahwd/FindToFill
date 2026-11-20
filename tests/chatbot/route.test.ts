@@ -9,7 +9,7 @@ import { QUICK_MESSAGE_IDS, type ChatResponse } from '@/lib/chatbot/contract';
 import { FALLBACK_MESSAGES } from '@/lib/chatbot/prompts';
 import { STUB_STATION } from '@/lib/chatbot/stub';
 
-// The station the browser detected or the user picked. GPS never reaches the server.
+// A station the user picked; GPS cases send lat and lng instead (see "GPS position").
 const STATION = { stationId: STUB_STATION.id };
 let clientCount = 0;
 
