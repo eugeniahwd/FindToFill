@@ -6,13 +6,19 @@ import { StationHeader } from '@/components/layout/StationHeader';
 import { FacilityCard } from '@/components/facility/FacilityCard';
 import { MapView } from '@/components/map/MapView';
 import { BottomSheet } from '@/components/common/BottomSheet';
+import { NextTrainCard } from '@/components/trains/NextTrainCard';
+import { useNow } from '@/components/trains/useNow';
+import { serviceClock } from '@/lib/trains/clock';
+import { mapTrains } from '@/lib/trains/mapTrains';
+import { directionSlides } from '@/lib/trains/nextTrains';
 import { useLocation } from '@/context/LocationContext';
 import { stationService } from '@/lib/services/stationService';
 import { FacilityWithStatus } from '@/lib/types';
 
 type LoadState = 'loading' | 'ready' | 'error';
 
-const HOME_MAP_ZOOM = 18;
+// About 1 km across on a phone: the station, its facilities, and trains on the neighbouring track.
+const HOME_MAP_ZOOM = 16;
 
 export default function HomePage() {
   const { stations, selectedStation, selectStation, coords } = useLocation();
@@ -42,6 +48,13 @@ export default function HomePage() {
 
   const retry = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
+  // Schedule-estimated trains around the selected station, refreshed every few seconds.
+  const now = useNow();
+  const clock = serviceClock(now);
+  const trains = mapTrains(selectedStation.name, clock);
+  // Keep the note steady for stations with a timetable instead of popping in with each train.
+  const hasTrainData = directionSlides(selectedStation.name, clock).length > 0;
+
   return (
     <div className="fixed inset-0 z-0 w-full max-w-md mx-auto map-under-nav">
       {/* Full-screen map with KRL lines, pilot stations, and facility markers */}
@@ -58,13 +71,21 @@ export default function HomePage() {
         scrollWheelZoom
         rounded={false}
         controlsPosition="bottomleft"
+        trains={trains}
         className="h-full w-full"
       />
 
       {/* Floating station card on top of the map */}
       <div className="absolute top-3 left-3 right-3 z-20 flex flex-col gap-2 pt-[env(safe-area-inset-top)]">
         <StationHeader />
+        <NextTrainCard stationName={selectedStation.name} />
         <FacilityLoadStatus state={loadState} isEmpty={facilities.length === 0} onRetry={retry} />
+        {hasTrainData && (
+          <div role="note" className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 shadow-md text-xs font-medium text-slate-600">
+            <span className="h-2 w-2 rounded-full bg-[#00628C]" aria-hidden="true" />
+            <span>Posisi kereta: perkiraan dari jadwal</span>
+          </div>
+        )}
       </div>
 
       {/* Facility detail, opened by clicking a marker */}

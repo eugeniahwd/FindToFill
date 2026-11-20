@@ -13,13 +13,27 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const [, , inPath, outPath, reportPath] = process.argv;
+const [, , inPath, outPath, reportPath, timetablePath] = process.argv;
 if (!inPath || !outPath) {
-  console.error('usage: node scripts/kai-schedule-to-csv.mjs <jabo_raw.txt> <out.csv> [<report.txt>]');
+  console.error(
+    'usage: node scripts/kai-schedule-to-csv.mjs <jabo_raw.txt> <out.csv> [<report.txt>] [<timetable.json>]',
+  );
   process.exit(1);
 }
 
 const PILOT = { MRI: 'Manggarai', TEB: 'Tebet', SUD: 'Sudirman' };
+// Display names of the stations a train can come from just before a pilot station.
+const STATION_NAMES = {
+  CW: 'Cawang',
+  TEB: 'Tebet',
+  MRI: 'Manggarai',
+  CKI: 'Cikini',
+  MTR: 'Matraman',
+  SUD: 'Sudirman',
+  SUDB: 'Sudirman Baru',
+};
+// Rows that start before 03:00 belong to the previous service day.
+const SERVICE_DAY_START_MIN = 180;
 const WEEKEND_CANCELLED = 'Sabtu/Minggu/Libur Nasional Batal';
 
 // Station order per branch, in the direction of travel.
@@ -87,6 +101,7 @@ const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 
 const lines = readFileSync(inPath, 'utf8').split(/\r?\n/);
 const out = new Map(); // dedupe key -> row
+const stops = []; // per-train pilot stops for the timetable JSON
 const report = [];
 const perTable = {};
 let table = null;
@@ -154,11 +169,13 @@ for (const raw of lines) {
   }
 
   // Times must not go backwards (allowing one wrap past midnight).
+  // mins[i]: minutes from 00:00 of the service day (after-midnight times > 1440), null for "Ls".
   let prev = null;
-  let wrapped = false;
+  const firstTime = tokens.find((t) => t !== 'Ls');
+  let wrapped = firstTime !== undefined && toMin(firstTime) < SERVICE_DAY_START_MIN;
   let bad = false;
-  for (const t of tokens) {
-    if (t === 'Ls') continue;
+  const mins = tokens.map((t) => {
+    if (t === 'Ls') return null;
     let v = toMin(t) + (wrapped ? 24 * 60 : 0);
     if (prev !== null && v < prev) {
       if (!wrapped && prev - v > 12 * 60) {
@@ -169,7 +186,8 @@ for (const raw of lines) {
       }
     }
     prev = v;
-  }
+    return v;
+  });
   if (bad) {
     report.push(`[${table.key}] KA ${trainNo} ${relasi}: times go backwards - SKIPPED`);
     continue;
@@ -200,6 +218,30 @@ for (const raw of lines) {
     if (t === 'Ls') return; // passes without stopping
     if (i === path.length - 1) return; // terminates here: no departure
     if (code === notBoardingAt) return;
+
+    // The nearest earlier stop with a time (a non-boarding first stop still marks where the train is).
+    let prevStop = null;
+    for (let j = i - 1; j >= 0; j -= 1) {
+      if (mins[j] === null) continue;
+      const name = STATION_NAMES[path[j]];
+      if (!name) {
+        console.error(`KA ${trainNo}: no display name for previous station ${path[j]}`);
+        process.exit(1);
+      }
+      prevStop = { code: path[j], name, minute: mins[j] };
+      break;
+    }
+    stops.push({
+      train: trainNo,
+      relasi,
+      station: PILOT[code],
+      line: table.line,
+      direction: table.direction[code],
+      days: dayTypes,
+      minute: mins[i],
+      prev: prevStop,
+    });
+
     for (const day of dayTypes) {
       const row = {
         station_name: PILOT[code],
@@ -246,6 +288,18 @@ report.push(`checked ${gapCount} gaps between neighbouring pilot stations`);
 report.push('', 'Rows per station / line / direction / day:');
 for (const [k, n] of Object.entries(summary)) report.push(`  ${k}: ${n}`);
 report.push(`TOTAL ${rows.length}`);
+
+if (timetablePath) {
+  const key = (s) => [s.station, s.line, s.direction].join('|');
+  stops.sort((a, b) => key(a).localeCompare(key(b)) || a.minute - b.minute);
+  const timetable = {
+    source: 'Jadwal Commuter Line Jabodetabek - Update 1 Desember 2026 (GAPEKA 2026)',
+    validFrom: '2026-12-01',
+    stops,
+  };
+  writeFileSync(timetablePath, `${JSON.stringify(timetable)}\n`);
+  report.push(`timetable: ${stops.length} stops -> ${timetablePath}`);
+}
 
 const text = report.join('\n');
 if (reportPath) writeFileSync(reportPath, `${text}\n`);

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { FacilityWithStatus, Station } from '@/lib/types';
 import { StatusBadge } from '../common/StatusBadge';
 import { formatDistance } from '@/lib/utils/geo';
+import type { MapTrain } from '@/lib/trains/mapTrains';
 import 'leaflet/dist/leaflet.css';
 
 interface MapViewProps {
@@ -27,6 +28,8 @@ interface MapViewProps {
    * and chatbot button use 'bottomleft' so neither is covered.
    */
   controlsPosition?: 'default' | 'bottomleft';
+  /** Schedule-estimated train positions (not live); the page shows the "perkiraan" note. */
+  trains?: MapTrain[];
   className?: string;
 }
 
@@ -93,6 +96,31 @@ const LeafletInnerMap = dynamic(
           tooltipAnchor: [0, -18],
         });
 
+        // Trains: a long car in the line colour, turned to run along the track. The light window
+        // marks the front. Icons are cached per colour and 5° step so they are not rebuilt every tick.
+        const trainIcons = new Map<string, import('leaflet').DivIcon>();
+        const trainIcon = (color: string, heading: number) => {
+          const angle = (Math.round(heading / 5) * 5) % 360;
+          const key = `${color}|${angle}`;
+          let icon = trainIcons.get(key);
+          if (!icon) {
+            icon = L.divIcon({
+              className: 'train-marker',
+              html:
+                `<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;transform:rotate(${angle}deg);">` +
+                `<div style="position:relative;box-sizing:border-box;width:13px;height:28px;border-radius:7px 7px 4px 4px;background:${color};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.35);">` +
+                '<div style="position:absolute;top:2px;left:2px;right:2px;height:5px;border-radius:3px 3px 1px 1px;background:#C8E6FF;"></div>' +
+                '</div></div>',
+              iconSize: [30, 30],
+              iconAnchor: [15, 15],
+              popupAnchor: [0, -14],
+              tooltipAnchor: [14, 0],
+            });
+            trainIcons.set(key, icon);
+          }
+          return icon;
+        };
+
         // Recenter only when the target actually changes, so panning is not undone on re-render.
         const RecenterMap = ({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) => {
           const map = useMap();
@@ -142,6 +170,7 @@ const LeafletInnerMap = dynamic(
           scrollWheelZoom = false,
           rounded = true,
           controlsPosition = 'default',
+          trains = [],
         }) => (
           <MapContainer
             center={center}
@@ -164,6 +193,22 @@ const LeafletInnerMap = dynamic(
             />
 
             {showKrlLines && <KrlLines />}
+
+            {/* Trains placed on the track by schedule (estimates, not live positions) */}
+            {trains.map((train) => (
+              <Marker key={train.key} position={train.position} icon={trainIcon(train.color, train.heading)} title={`KA ${train.detail.train}`}>
+                <Tooltip permanent direction="right" className="train-tooltip">
+                  <span className="text-[10px] font-bold text-navy">{train.label}</span>
+                </Tooltip>
+                <Popup>
+                  <div className="flex flex-col gap-0.5 text-xs text-navy">
+                    <span className="font-bold">KA {train.detail.train}</span>
+                    <span>{train.detail.relasi}</span>
+                    <span>Tiba {train.detail.arrival} (perkiraan dari jadwal)</span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
 
             {/* Blue dot for User Location */}
             {userCoords && (
