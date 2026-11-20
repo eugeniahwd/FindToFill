@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { FacilityWithStatus, Station } from '@/lib/types';
 import { StatusBadge } from '../common/StatusBadge';
 import { formatDistance } from '@/lib/utils/geo';
+import type { MapTrain } from '@/lib/trains/mapTrains';
 import 'leaflet/dist/leaflet.css';
 
 interface MapViewProps {
@@ -27,6 +28,8 @@ interface MapViewProps {
    * and chatbot button use 'bottomleft' so neither is covered.
    */
   controlsPosition?: 'default' | 'bottomleft';
+  /** Schedule-estimated train positions (not live); the page shows the "perkiraan" note. */
+  trains?: MapTrain[];
   className?: string;
 }
 
@@ -93,6 +96,24 @@ const LeafletInnerMap = dynamic(
           tooltipAnchor: [0, -18],
         });
 
+        // Trains: a small pill in the line colour, one cached icon per colour.
+        const trainIcons = new Map<string, import('leaflet').DivIcon>();
+        const trainIcon = (color: string) => {
+          let icon = trainIcons.get(color);
+          if (!icon) {
+            icon = L.divIcon({
+              className: 'train-marker',
+              html: `<div style="width:24px;height:14px;border-radius:5px 8px 8px 5px;background:${color};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`,
+              iconSize: [24, 14],
+              iconAnchor: [12, 7],
+              popupAnchor: [0, -10],
+              tooltipAnchor: [12, 0],
+            });
+            trainIcons.set(color, icon);
+          }
+          return icon;
+        };
+
         // Recenter only when the target actually changes, so panning is not undone on re-render.
         const RecenterMap = ({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) => {
           const map = useMap();
@@ -142,6 +163,7 @@ const LeafletInnerMap = dynamic(
           scrollWheelZoom = false,
           rounded = true,
           controlsPosition = 'default',
+          trains = [],
         }) => (
           <MapContainer
             center={center}
@@ -164,6 +186,22 @@ const LeafletInnerMap = dynamic(
             />
 
             {showKrlLines && <KrlLines />}
+
+            {/* Trains placed on the track by schedule (estimates, not live positions) */}
+            {trains.map((train) => (
+              <Marker key={train.key} position={train.position} icon={trainIcon(train.color)} title={`KA ${train.detail.train}`}>
+                <Tooltip permanent direction="right" className="train-tooltip">
+                  <span className="text-[10px] font-bold text-navy">{train.label}</span>
+                </Tooltip>
+                <Popup>
+                  <div className="flex flex-col gap-0.5 text-xs text-navy">
+                    <span className="font-bold">KA {train.detail.train}</span>
+                    <span>{train.detail.relasi}</span>
+                    <span>Tiba {train.detail.arrival} (perkiraan dari jadwal)</span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
 
             {/* Blue dot for User Location */}
             {userCoords && (
