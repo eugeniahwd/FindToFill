@@ -29,6 +29,8 @@ interface LocationContextValue {
   detectedStation: Station | null;
   selectedStation: Station;
   selectStation: (station: Station) => void;
+  /** True when the user picked the station by hand; false when it came from GPS or the default. */
+  isStationPickedManually: boolean;
   isFarFromPilotStations: boolean;
   distanceToSelectedStationM: number | null;
   showStationPicker: boolean;
@@ -48,6 +50,7 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [detectedStation, setDetectedStation] = useState<Station | null>(null);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [isFarFromPilotStations, setIsFarFromPilotStations] = useState<boolean>(false);
+  const [isStationPickedManually, setIsStationPickedManually] = useState<boolean>(false);
   const [showStationPicker, setShowStationPicker] = useState<boolean>(false);
 
   // Load pilot stations once (and again on "Coba lagi").
@@ -71,7 +74,8 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
     };
   }, [loadAttempt]);
 
-  // GPS is only used here to pick the nearest station; it is never sent to the server.
+  // GPS picks the nearest station here. The chatbot also sends it with each POST /api/chat
+  // request so the server can measure distances; it is never stored.
   const resolvePosition = useCallback(
     (latitude: number, longitude: number) => {
       setCoords({ latitude, longitude });
@@ -81,6 +85,7 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
       if (match) {
         setDetectedStation(match.station);
         setSelectedStation(match.station);
+        setIsStationPickedManually(false);
         setIsFarFromPilotStations(!match.isWithinRadius);
       }
       setIsLocating(false);
@@ -130,6 +135,7 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const selectStation = (station: Station) => {
     setSelectedStation(station);
+    setIsStationPickedManually(true);
     setShowStationPicker(false);
   };
 
@@ -153,6 +159,7 @@ export const LocationProvider: React.FC<{ children: ReactNode }> = ({ children }
         detectedStation,
         selectedStation,
         selectStation,
+        isStationPickedManually,
         isFarFromPilotStations,
         distanceToSelectedStationM,
         showStationPicker,

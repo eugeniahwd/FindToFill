@@ -7,7 +7,6 @@ import {
   User,
   Favorite,
   Stamp,
-  QuickMessage,
 } from '../types';
 
 export const MOCK_USERS: User[] = [
@@ -437,28 +436,5 @@ export const MOCK_STAMPS: Stamp[] = [
     facilityId: 'fac-sud-01',
     stationId: 'station-sudirman',
     stampedAt: daysAgo(2),
-  },
-];
-
-export const QUICK_MESSAGES: QuickMessage[] = [
-  {
-    id: 'nearest_water',
-    text: 'Carikan stasiun dengan dispenser terdekat dari lokasiku sekarang',
-  },
-  {
-    id: 'nearest_charging',
-    text: 'Cari charging station terdekat dari lokasiku sekarang',
-  },
-  {
-    id: 'facility_working',
-    text: 'Apakah fasilitas di stasiun ini masih berfungsi?',
-  },
-  {
-    id: 'time_to_refill',
-    text: 'Sempat isi air sebelum kereta berikutnya datang?',
-  },
-  {
-    id: 'review_summary',
-    text: 'Rangkum ulasan air di stasiun ini',
   },
 ];

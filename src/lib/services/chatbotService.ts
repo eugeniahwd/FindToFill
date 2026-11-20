@@ -1,233 +1,120 @@
-import { ChatResponse, QuickMessageId } from '../types';
-import { stationService } from './stationService';
-import { findNearestStation } from '../utils/geo';
-import { reviewService } from './reviewService';
+import type { ChatRequest, ChatResponse, QuickMessageId } from '@/lib/chatbot/contract';
+
+export interface ChatAskInput {
+  quickMessageId: QuickMessageId;
+  /** The browser's GPS position, or null when location is denied or unavailable. */
+  coords: { latitude: number; longitude: number } | null;
+  /** Only when the user picked the station by hand, or GPS is unavailable. */
+  stationId?: string | null;
+  sessionId?: string | null;
+}
+
+export interface ChatResult {
+  /** HTTP status, or 0 when the request never got a response (offline, aborted). */
+  status: number;
+  response: ChatResponse;
+}
+
+const SESSION_KEY = 'findtofill.chatSessionId';
+const NETWORK_ERROR_MESSAGE =
+  'Asisten tidak dapat dihubungi. Periksa koneksi, atau lihat peta untuk fasilitas terdekat.';
+
+// The server rejects (400) any sessionId that is not a UUID, so a corrupted stored value is replaced.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+let memorySessionId: string | null = null;
+
+/**
+ * Builds the POST /api/chat body. lat/lng go together or not at all, and absent values are
+ * omitted rather than sent as null (the server rejects null and unknown fields).
+ */
+export function buildChatRequest(input: ChatAskInput): ChatRequest {
+  const { quickMessageId, coords, stationId, sessionId } = input;
+  const hasCoords =
+    coords !== null && Number.isFinite(coords.latitude) && Number.isFinite(coords.longitude);
+
+  return {
+    quickMessageId,
+    ...(hasCoords ? { lat: coords.latitude, lng: coords.longitude } : {}),
+    ...(stationId ? { stationId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+  };
+}
+
+/** One anonymous id per browser session (sessionStorage), or null when crypto is unavailable. */
+export function getChatSessionId(): string | null {
+  try {
+    const stored = window.sessionStorage.getItem(SESSION_KEY);
+    if (stored && UUID_PATTERN.test(stored)) return stored;
+  } catch {
+    // Storage blocked (private mode, sandboxed iframe): fall back to memory below.
+  }
+  if (memorySessionId) return memorySessionId;
+  if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') return null;
+
+  memorySessionId = crypto.randomUUID();
+  try {
+    window.sessionStorage.setItem(SESSION_KEY, memorySessionId);
+  } catch {
+    // Keep the in-memory id.
+  }
+  return memorySessionId;
+}
+
+function networkFailure(): ChatResult {
+  return {
+    status: 0,
+    response: {
+      outcome: 'fallback_ai_unavailable',
+      message: NETWORK_ERROR_MESSAGE,
+      cards: [],
+      scheduleReminder: false,
+      needsStationSelection: false,
+      detectedStation: null,
+      generatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function isChatResponse(value: unknown): value is ChatResponse {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.outcome === 'string' && typeof v.message === 'string' && Array.isArray(v.cards);
+}
 
 export const chatbotService = {
-  // TODO(Sprint 5): Replace with POST /api/chat (Groq tool calling + orchestrator in src/lib/chatbot)
-  async ask(
-    quickMessageId: QuickMessageId,
-    coords?: { latitude: number; longitude: number } | null,
-    overrideStationId?: string,
-    simulateFallback = false
-  ): Promise<ChatResponse> {
-    await new Promise((r) => setTimeout(r, 700));
-
-    if (simulateFallback) {
-      return {
-        outcome: 'fallback_ai_unavailable',
-        message:
-          'Layanan AI sedang tidak tersedia. Silakan cek peta stasiun untuk mencari fasilitas terdekat secara langsung.',
-        generatedAt: new Date().toISOString(),
-      };
+  /** Calls POST /api/chat. Never throws: a network or parse failure becomes an AI-unavailable reply. */
+  async ask(input: ChatAskInput): Promise<ChatResult> {
+    let res: Response;
+    try {
+      res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildChatRequest(input)),
+      });
+    } catch {
+      return networkFailure();
     }
 
-    // Determine current station (pilot stations from the database)
-    const stations = (await stationService.getStations()).filter((s) => s.isPilot);
-    if (stations.length === 0) {
-      return {
-        outcome: 'fallback_no_data',
-        message: 'Data stasiun belum tersedia. Silakan cek peta stasiun.',
-        generatedAt: new Date().toISOString(),
-      };
+    let body: unknown;
+    try {
+      body = await res.json();
+    } catch {
+      return { ...networkFailure(), status: res.status };
     }
-    let targetStation = stations[0];
-    if (overrideStationId) {
-      const match = stations.find((s) => s.id === overrideStationId);
-      if (match) targetStation = match;
-    } else if (coords) {
-      const nearest = findNearestStation(
-        coords.latitude,
-        coords.longitude,
-        stations
-      );
-      if (nearest) targetStation = nearest.station;
-    }
+    if (!isChatResponse(body)) return { ...networkFailure(), status: res.status };
 
-    const stationFacilities = await stationService.getStationFacilities(
-      targetStation.id,
-      coords
-    );
+    const retryHeader = Number(res.headers.get('Retry-After'));
+    const retryAfterSec =
+      body.retryAfterSec ?? (res.status === 429 && retryHeader > 0 ? retryHeader : undefined);
 
-    const waterFacilities = stationFacilities.filter((f) => f.type === 'water');
-    const chargingFacilities = stationFacilities.filter(
-      (f) => f.type === 'charging'
-    );
-
-    switch (quickMessageId) {
-      case 'nearest_water': {
-        const best =
-          waterFacilities.find((f) => f.currentStatus === 'available') ||
-          waterFacilities[0];
-
-        if (!best) {
-          return {
-            outcome: 'fallback_no_data',
-            message: `Maaf, belum ada data dispenser air di Stasiun ${targetStation.name}.`,
-            detectedStation: targetStation.name,
-            generatedAt: new Date().toISOString(),
-          };
-        }
-
-        const distanceM = best.distanceMeters ?? 45;
-        return {
-          outcome: 'answered',
-          detectedStation: targetStation.name,
-          message: `Dispenser air minum terdekat di Stasiun ${targetStation.name} berada di ${best.name} (${distanceM} m dari titik Anda). Kondisi terakhir dilaporkan ${best.currentStatus === 'available' ? 'berfungsi baik' : best.currentStatus}.`,
-          card: {
-            facilityId: best.id,
-            facilityName: best.name,
-            stationName: targetStation.name,
-            locationDetail: best.locationDetail || best.platform || 'Area peron',
-            distanceMeters: distanceM,
-            status: best.currentStatus,
-            lastReportedAt: best.lastReportedAt,
-            photoUrl: best.lastPhotoUrl || undefined,
-          },
-          generatedAt: new Date().toISOString(),
-        };
-      }
-
-      case 'nearest_charging': {
-        const best =
-          chargingFacilities.find((f) => f.currentStatus === 'available') ||
-          chargingFacilities[0];
-
-        if (!best) {
-          return {
-            outcome: 'fallback_no_data',
-            message: `Maaf, belum ada data charging station di Stasiun ${targetStation.name}.`,
-            detectedStation: targetStation.name,
-            generatedAt: new Date().toISOString(),
-          };
-        }
-
-        const distanceM = best.distanceMeters ?? 35;
-        return {
-          outcome: 'answered',
-          detectedStation: targetStation.name,
-          message: `Charging station terdekat di Stasiun ${targetStation.name} ada di ${best.name} (${distanceM} m). ${best.currentStatus === 'available' ? 'Port colokan siap digunakan.' : 'Saat ini dilaporkan berkendala.'}`,
-          card: {
-            facilityId: best.id,
-            facilityName: best.name,
-            stationName: targetStation.name,
-            locationDetail: best.locationDetail || best.platform || 'Area peron',
-            distanceMeters: distanceM,
-            status: best.currentStatus,
-            lastReportedAt: best.lastReportedAt,
-            photoUrl: best.lastPhotoUrl || undefined,
-          },
-          generatedAt: new Date().toISOString(),
-        };
-      }
-
-      case 'facility_working': {
-        const workingCount = stationFacilities.filter(
-          (f) => f.currentStatus === 'available'
-        ).length;
-        const best =
-          stationFacilities.find((f) => f.currentStatus === 'available') ||
-          stationFacilities[0];
-
-        if (!best) {
-          return {
-            outcome: 'fallback_no_data',
-            message: `Belum ada laporan aktif untuk fasilitas di Stasiun ${targetStation.name}.`,
-            detectedStation: targetStation.name,
-            generatedAt: new Date().toISOString(),
-          };
-        }
-
-        return {
-          outcome: 'answered',
-          detectedStation: targetStation.name,
-          message: `Di Stasiun ${targetStation.name}, terdapat ${workingCount} dari ${stationFacilities.length} fasilitas yang saat ini berstatus aktif dan berfungsi normal berdasarkan laporan 7 hari terakhir.`,
-          card: {
-            facilityId: best.id,
-            facilityName: best.name,
-            stationName: targetStation.name,
-            locationDetail: best.locationDetail || best.platform || 'Area peron',
-            distanceMeters: best.distanceMeters ?? 50,
-            status: best.currentStatus,
-            lastReportedAt: best.lastReportedAt,
-            photoUrl: best.lastPhotoUrl || undefined,
-          },
-          generatedAt: new Date().toISOString(),
-        };
-      }
-
-      case 'time_to_refill': {
-        const best =
-          waterFacilities.find((f) => f.currentStatus === 'available') ||
-          waterFacilities[0];
-
-        if (!best) {
-          return {
-            outcome: 'fallback_no_data',
-            message: `Tidak ditemukan dispenser air aktif di Stasiun ${targetStation.name}.`,
-            detectedStation: targetStation.name,
-            generatedAt: new Date().toISOString(),
-          };
-        }
-
-        const walkTime = best.walkTimeMin ?? 1;
-        const totalNeeded = walkTime * 2 + 1; // 2x walk + 1 min refill
-
-        return {
-          outcome: 'answered',
-          detectedStation: targetStation.name,
-          scheduleReminder: true,
-          message: `Estimasi jalan bolak-balik ke ${best.name} dan mengisi botol adalah sekitar ${totalNeeded} menit. Kereta berikutnya tiba dalam ~6 menit, waktu Anda cukup!`,
-          card: {
-            facilityId: best.id,
-            facilityName: best.name,
-            stationName: targetStation.name,
-            locationDetail: best.locationDetail || best.platform || 'Area peron',
-            distanceMeters: best.distanceMeters ?? 45,
-            status: best.currentStatus,
-            lastReportedAt: best.lastReportedAt,
-            photoUrl: best.lastPhotoUrl || undefined,
-          },
-          generatedAt: new Date().toISOString(),
-        };
-      }
-
-      case 'review_summary': {
-        const reviews = await reviewService.getStationReviews(targetStation.id);
-        const best = waterFacilities[0] || stationFacilities[0];
-
-        const summaryText =
-          reviews.length > 0
-            ? `Pengguna menyatakan air di dispenser Stasiun ${targetStation.name} segar, bersih, dan dingin. Rata-rata rating ${((reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length) || 4.8).toFixed(1)}/5.`
-            : `Dispenser air di Stasiun ${targetStation.name} dirawat secara berkala oleh petugas kebersihan KAI Commuter.`;
-
-        return {
-          outcome: 'answered',
-          detectedStation: targetStation.name,
-          message: summaryText,
-          card: best
-            ? {
-                facilityId: best.id,
-                facilityName: best.name,
-                stationName: targetStation.name,
-                locationDetail:
-                  best.locationDetail || best.platform || 'Area peron',
-                distanceMeters: best.distanceMeters ?? 45,
-                status: best.currentStatus,
-                lastReportedAt: best.lastReportedAt,
-                photoUrl: best.lastPhotoUrl || undefined,
-              }
-            : undefined,
-          generatedAt: new Date().toISOString(),
-        };
-      }
-
-      default:
-        return {
-          outcome: 'rejected',
-          message: 'Permintaan tidak dikenali.',
-          generatedAt: new Date().toISOString(),
-        };
-    }
+    return {
+      status: res.status,
+      response: {
+        ...body,
+        cards: body.cards.slice(0, 3),
+        ...(retryAfterSec !== undefined ? { retryAfterSec } : {}),
+      },
+    };
   },
 };
