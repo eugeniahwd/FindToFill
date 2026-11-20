@@ -73,7 +73,16 @@ describe('committed seed files', () => {
   it('mark every placeholder row as demo data', () => {
     expect(stations.every((s) => s.is_demo_data)).toBe(true);
     expect(facilities.every((f) => f.row.is_demo_data)).toBe(true);
-    expect(schedules.every((s) => s.row.direction.includes('(DEMO)'))).toBe(true);
+  });
+
+  // schedules.csv is the KAI Commuter timetable (GAPEKA 2026), made by scripts/kai-schedule-to-csv.mjs.
+  it('hold the real timetable for every pilot station on weekdays and weekends', () => {
+    expect(schedules.some((s) => s.row.direction.includes('(DEMO)'))).toBe(false);
+    for (const s of stations.filter((st) => st.is_pilot)) {
+      for (const day of ['weekday', 'weekend']) {
+        expect(schedules.some((r) => r.stationName === s.name && r.row.day_type === day)).toBe(true);
+      }
+    }
   });
 
   it('place every facility within the station detection radius of its station', () => {
