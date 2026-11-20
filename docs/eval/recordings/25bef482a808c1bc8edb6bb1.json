@@ -1,0 +1,15 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_e9284aa8-0693-4e53-95e8-673a831bc937",
+      "name": "get_facility_status",
+      "args": {
+        "facility_ids": [
+          "fac-manggarai-water-exit-a",
+          "fac-manggarai-water-p3",
+          "fac-manggarai-water-p1"
+        ]
+      }
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 /**
  * src/lib/chatbot/contract.ts
  *
- * HTTP contract for POST /api/chat, shared with the Frontend.
- * Copied exactly from docs/AI_TRACK.md §3.1. Keep it stable: any change needs a note to the team.
+ * HTTP contract for POST /api/chat, shared with the Frontend (docs/AI_TRACK.md §3.1, with the
+ * GPS position from docs/AI_CHATBOT.md). Keep it stable: any change needs a note to the team.
  */
 
 export const QUICK_MESSAGE_IDS = [
@@ -18,7 +18,12 @@ export type FacilityStatus = 'available' | 'empty' | 'broken' | 'under_maintenan
 
 export interface ChatRequest {
   quickMessageId: QuickMessageId;
-  // The station the app shows (detected in the browser or picked). GPS never reaches the server.
+  // The browser's GPS position, always both or neither. Used for this request only: resolved to
+  // the nearest pilot station and to distances, never stored, logged, or shown to the model.
+  lat?: number;
+  lng?: number;
+  // The station the user picked (or the one the app shows). It wins over GPS for which station;
+  // GPS still gives the distances when the user is within the detection radius of it.
   stationId?: string;
   sessionId?: string; // anonymous random id from the client (optional)
 }
@@ -31,15 +36,18 @@ export interface ChatCard {
   locationDetail: string | null;
   level: string | null;
   distanceM: number;
-  distanceIsApproximate: boolean; // true when measured from the station center
+  // false: measured from the user's GPS position. true: from the station center (no GPS, or
+  // the user is not at the station).
+  distanceIsApproximate: boolean;
   walkTimeMin: number;
   status: FacilityStatus;
   lastReportedAt: string | null; // ISO 8601
   minutesAgo: number | null;
 }
 
-// Station detection happens in the browser, so the server sends source "manual" and
-// needsConfirmation false. The fields stay for contract stability.
+// source "gps": the GPS position is within the detection radius of the station. "manual": the
+// station came from stationId alone. needsConfirmation: GPS is within the radius of more than
+// one pilot station, so the app should let the user confirm (docs/SPEC.md §4.2).
 export interface DetectedStation {
   id: string;
   name: string;

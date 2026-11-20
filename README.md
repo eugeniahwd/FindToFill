@@ -155,8 +155,14 @@ npm run start
 ```ts
 import type { ChatRequest, ChatResponse } from '@/lib/chatbot/contract';
 
-// selectedStation comes from LocationContext: detected in the browser or picked by the user.
-const body: ChatRequest = { quickMessageId, stationId: selectedStation.id, sessionId };
+// coords: the browser's current GPS position (null when location is denied).
+// pickedStationId: only when the user chose a station by hand.
+const body: ChatRequest = {
+  quickMessageId,
+  ...(coords ? { lat: coords.latitude, lng: coords.longitude } : {}),
+  ...(pickedStationId ? { stationId: pickedStationId } : {}),
+  sessionId,
+};
 
 const res = await fetch('/api/chat', {
   method: 'POST',
@@ -169,7 +175,9 @@ const data = (await res.json()) as ChatResponse;
 Request rules (anything else gets `400 rejected`):
 
 - `quickMessageId`: one of `QUICK_MESSAGE_IDS`. Take the button texts from `QUICK_MESSAGES` in [`src/lib/chatbot/quickMessages.ts`](src/lib/chatbot/quickMessages.ts); the server never reads client text.
-- `stationId`: the station the app shows, detected in the browser from GPS or picked by the user. GPS coordinates never go to the server: a request with `lat` or `lng` gets a 400. Without `stationId`, the reply asks the user to pick a station.
+- `lat` and `lng` (optional, always together, numbers): the user's GPS position. The server finds the nearest pilot station within 800 m and measures every distance from the user. The position is used for that one request only: it is never stored, never logged, and never sent to the AI model, which only sees the distances.
+- `stationId` (optional): the station the user picked by hand. It decides the station even when GPS is sent. If the user is within 800 m of that station, distances still come from GPS; if not (for example a demo on campus), they come from the station center and are approximate.
+- Neither: the reply asks the user to pick a station. GPS more than 800 m from every pilot station: the reply says the user is not at a pilot station and asks them to pick one.
 - `sessionId` (optional): `crypto.randomUUID()`, kept for the browser session.
 - No other fields and no `null` values; omit a field instead.
 
@@ -182,11 +190,11 @@ Request rules (anything else gets `400 rejected`):
 | 429 | `rejected` | `message`. Retry after `retryAfterSec` seconds (also in the `Retry-After` header). |
 | 500 | `fallback_ai_unavailable` | `message` and a link to the map |
 
-Each card has `name`, `platform`, `locationDetail`, `distanceM`, `walkTimeMin`, `status` (`unknown` means "No recent report"), and `lastReportedAt` / `minutesAgo`. The server never has the user's position, so `distanceM` is measured from the station center and `distanceIsApproximate` is always true: show it as approximate. `detectedStation.name` is the station the answer is about.
+Each card has `name`, `platform`, `locationDetail`, `distanceM`, `walkTimeMin`, `status` (`unknown` means "No recent report"), and `lastReportedAt` / `minutesAgo`. `distanceIsApproximate` is false when `distanceM` is measured from the user's GPS position, and true when it is measured from the station center: then show it as approximate. `detectedStation.name` is the station the answer is about; `detectedStation.source` is `gps` or `manual`, and when `needsConfirmation` is true, let the user confirm or change the station.
 
 **Pilot stations:** 3, as in the seed data: Manggarai, Sudirman, and Tebet. `docs/SPEC.md` §3 still names 5; SPEC lets the team change the list, and the seed data is the source.
 
-**Which answers you get** depends on `CHATBOT_MODE` (details in [AI module handoff](#ai-module-handoff)). With the defaults (`stub`), only `stationId: "station-manggarai"` has data. With `CHATBOT_MODE=fake`, the three demo pilot stations `station-manggarai`, `station-sudirman`, and `station-tebet` answer. Any other `stationId`, including real database ids before `CHATBOT_DATA=supabase` is wired, gets the no-data fallback with the station picker.
+**Which answers you get** depends on `CHATBOT_MODE` (details in [AI module handoff](#ai-module-handoff)). With the defaults (`stub`), only Manggarai has data (`stationId: "station-manggarai"` or GPS near Manggarai), and the stub's distances are canned. With `CHATBOT_MODE=fake` or `live`, the three demo pilot stations `station-manggarai`, `station-sudirman`, and `station-tebet` answer, by `stationId` or by GPS near them. Any other `stationId`, including real database ids before `CHATBOT_DATA=supabase` is wired, gets the no-data fallback with the station picker.
 
 **Rate limit:** 20 requests per hour per client. The key comes from Backend's `chatRateLimitKey()`: the user id when signed in (supabase mode), otherwise an HMAC of the IP with `IP_HASH_SALT`. Production must set `IP_HASH_SALT`; without it every chat request returns 500. With `CHATBOT_DATA=fake` the count is kept in memory per server instance, so restarting `npm run dev` or a Vercel cold start resets it. With `CHATBOT_DATA=supabase` it is stored in `rate_limit_events`.
 
@@ -225,4 +233,4 @@ npm run eval:chatbot -- --mode live --replay   # replays recorded Groq answers, 
 npm run eval:chatbot -- --mode live --only nw-manggarai --record   # real Groq, saves answers
 ```
 
-The cases are in [`docs/eval/sample_questions.json`](docs/eval/sample_questions.json): 3 per quick message plus no report in 7 days, unknown station, no schedule, AI unavailable, and a prompt injection inside a review. The pass bar is at least 18 of 20 and zero invented facts. Live runs spend the free Groq quota (8K tokens per minute, about two cases per minute; a full run uses about 70K of the 200K tokens per day), so keep them small; the script waits and retries on a 429. Results and known gaps: [`docs/eval/README.md`](docs/eval/README.md).
+The cases are in [`docs/eval/sample_questions.json`](docs/eval/sample_questions.json): 3 per quick message plus no report in 7 days, unknown station, no schedule, AI unavailable, a prompt injection inside a review, and 4 GPS cases (at the station, far away, far away with a picked station). The pass bar is 90% (22 of 24) and zero invented facts. Live runs spend the free Groq quota (8K tokens per minute, about two cases per minute; a full run uses about 70K of the 200K tokens per day), so keep them small; the script waits and retries on a 429. Results and known gaps: [`docs/eval/README.md`](docs/eval/README.md).

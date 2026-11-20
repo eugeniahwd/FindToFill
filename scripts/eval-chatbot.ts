@@ -38,7 +38,7 @@ import { checkAnswer, type AnswerProblem } from '../src/lib/chatbot/validation';
 const ROOT = join(__dirname, '..');
 const CASES_FILE = join(ROOT, 'docs', 'eval', 'sample_questions.json');
 const RECORDINGS = join(ROOT, 'docs', 'eval', 'recordings');
-/** 18 of 20; a smaller run (--limit, --only) needs the same share, rounded up. */
+/** 18 of 20 (§15); any other number of cases needs the same share, rounded up. */
 const PASS_RATE = 18 / 20;
 const MAX_ATTEMPTS = 3;
 /** Problems that mean the message states something no tool returned. */
@@ -53,7 +53,14 @@ const CaseSchema = z
   .object({
     id: z.string().min(1),
     quickMessageId: z.enum(QUICK_MESSAGE_IDS),
-    context: z.object({ stationId: z.string().optional(), now: z.iso.datetime().optional() }).strict(),
+    context: z
+      .object({
+        stationId: z.string().optional(),
+        lat: z.number().optional(),
+        lng: z.number().optional(),
+        now: z.iso.datetime().optional(),
+      })
+      .strict(),
     dataset: z.enum(DEMO_DATASETS),
     simulate: z.literal('model_rate_limited').optional(),
     expected: z
@@ -171,9 +178,11 @@ async function runCase(testCase: EvalCase, defaultNow: string, model: () => LLMC
       ? new FakeLLMClient({ mode: 'adversarial', attack: 'rate_limited' })
       : model(),
   );
+  const { stationId, lat, lng } = testCase.context;
   const body = {
     quickMessageId: testCase.quickMessageId,
-    ...(testCase.context.stationId ? { stationId: testCase.context.stationId } : {}),
+    ...(stationId ? { stationId } : {}),
+    ...(lat !== undefined && lng !== undefined ? { lat, lng } : {}),
   };
   const startedAt = performance.now();
   const { response, evidence } = await handleChat(body, {

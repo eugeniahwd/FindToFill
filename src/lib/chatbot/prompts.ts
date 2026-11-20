@@ -53,8 +53,17 @@ export const FALLBACK_MESSAGES = {
     'Aku belum menemukan data fasilitas untuk pertanyaan ini. Coba pilih stasiun lain atau lihat peta.',
   outsidePilotArea:
     'Kamu sepertinya tidak berada di stasiun pilot FindToFill. Pilih stasiun secara manual untuk melanjutkan.',
-  // The request had no stationId: the browser could not detect a station and none was picked.
+  // The request had neither a GPS position nor a stationId (location denied, nothing picked).
   noLocation: 'Lokasimu belum terdeteksi. Pilih stasiun secara manual untuk melanjutkan.',
   rejected: 'Pertanyaan tidak dikenali.',
   rateLimited: 'Terlalu banyak permintaan. Coba lagi nanti.',
 } as const;
+
+/** The station-picker message for each reason resolveLocation found no station. */
+export function locationFallbackMessage(
+  reason: 'no_location' | 'unknown_station' | 'outside_pilot_area',
+): string {
+  if (reason === 'no_location') return FALLBACK_MESSAGES.noLocation;
+  if (reason === 'outside_pilot_area') return FALLBACK_MESSAGES.outsidePilotArea;
+  return FALLBACK_MESSAGES.noData;
+}

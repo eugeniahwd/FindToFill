@@ -34,7 +34,7 @@ describe('stub responses', () => {
       expect(res.cards.length).toBeLessThanOrEqual(MAX_CARDS);
     }
     for (const card of res.cards) {
-      // GPS stays in the browser, so distances are always from the station center.
+      // The stub's distances are canned and measured from the station center.
       expect(card.distanceIsApproximate).toBe(true);
       const reportedAt =
         card.minutesAgo === null

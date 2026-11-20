@@ -1,0 +1,13 @@
+{
+  "toolCalls": [
+    {
+      "id": "fc_71c024b1-2e55-4689-a648-1e27a0117137",
+      "name": "get_nearest_facility",
+      "args": {
+        "limit": 3,
+        "station_id": "station-manggarai",
+        "type": "water"
+      }
+    }
+  ]
+}

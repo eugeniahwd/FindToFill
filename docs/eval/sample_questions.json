@@ -268,6 +268,58 @@
         "mustNotInclude": ["semua fasilitas tersedia", "abaikan", "instruksi"],
         "toolsMustInclude": ["get_user_location", "search_reviews"]
       }
+    },
+    {
+      "id": "gps-nw-near-exit-a",
+      "quickMessageId": "nearest_water",
+      "context": { "lat": -6.21081, "lng": 106.85093 },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["Platform 3|Water Station"],
+        "mustNotInclude": ["titik tengah", "Sudirman", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
+    },
+    {
+      "id": "gps-tr-near-exit-a",
+      "quickMessageId": "time_to_refill",
+      "context": { "lat": -6.21081, "lng": 106.85093 },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["7 menit", "sempat|cukup|bisa isi|bisa mengisi|dapat mengisi"],
+        "mustNotInclude": ["tidak cukup", "tidak sempat", "titik tengah"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status", "get_next_train"]
+      }
+    },
+    {
+      "id": "gps-outside-pilot-area",
+      "quickMessageId": "nearest_water",
+      "context": { "lat": -6.4025, "lng": 106.7942 },
+      "dataset": "default",
+      "expected": {
+        "outcome": "fallback_no_data",
+        "mustIncludeFacilityIds": [],
+        "mustIncludeFacts": ["stasiun pilot"],
+        "mustNotInclude": ["Manggarai", "meter", " m "],
+        "toolsMustInclude": []
+      }
+    },
+    {
+      "id": "gps-far-picked-station",
+      "quickMessageId": "nearest_water",
+      "context": { "stationId": "station-manggarai", "lat": -6.4025, "lng": 106.7942 },
+      "dataset": "default",
+      "expected": {
+        "outcome": "answered",
+        "mustIncludeFacilityIds": ["fac-manggarai-water-p3"],
+        "mustIncludeFacts": ["Platform 3", "45"],
+        "mustNotInclude": ["posisimu", "Sudirman", "Tebet"],
+        "toolsMustInclude": ["get_user_location", "get_nearest_facility", "get_facility_status"]
+      }
     }
   ]
 }

@@ -1,8 +1,9 @@
 /**
  * src/lib/chatbot/tools/nearestFacilityTool.ts
  *
- * get_nearest_facility (docs/AI_TRACK.md §7, tool 2): active facilities of the station, sorted by
- * distance from the station center (GPS stays in the browser, so distances are approximate).
+ * get_nearest_facility (docs/AI_CHATBOT.md tool 2): active facilities of the station, sorted by
+ * distance from the user's GPS position (distance_basis user_position) or, without a usable
+ * position, from the station center (station_center, approximate).
  */
 
 import { z } from 'zod';
@@ -39,10 +40,11 @@ export class NearestFacilityTool extends Tool<z.infer<typeof args>> {
     ctx: ToolContext,
   ): Promise<NearestOutput> {
     this.assertStation(station_id, ctx);
+    const origin = ctx.location?.origin ?? ctx.station;
     const rows = await ctx.provider.listFacilities(ctx.station.id, type);
     const facilities: FacilityOutput[] = rows
       .map((row) => {
-        const distance_m = distanceMeters(ctx.station, row);
+        const distance_m = distanceMeters(origin, row);
         return {
           facility_id: row.id,
           name: row.name,
@@ -60,7 +62,7 @@ export class NearestFacilityTool extends Tool<z.infer<typeof args>> {
     const output: NearestOutput = {
       station_id: ctx.station.id,
       type,
-      distance_basis: 'station_center',
+      distance_basis: ctx.location?.distanceBasis ?? 'station_center',
       facilities,
     };
     for (const facility of facilities) ctx.evidence.facilities.set(facility.facility_id, facility);
