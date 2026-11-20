@@ -30,13 +30,13 @@ function mockLocation(name: string) {
     detectedStation: station(name),
     selectedStation: station(name),
     selectStation: jest.fn(),
+    isStationPickedManually: false,
     isFarFromPilotStations: false,
     distanceToSelectedStationM: null,
     showStationPicker: false,
     setShowStationPicker: jest.fn(),
     requestLocation: jest.fn(),
-    // Cast: feat/chatbot-api-client adds more context fields the home page does not use.
-  } as ReturnType<typeof useLocation>);
+  });
 }
 
 describe('home page trains', () => {
