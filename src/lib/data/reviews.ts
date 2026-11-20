@@ -50,6 +50,20 @@ export async function listStationReviews(
   return data.map((row) => toReview(row, names.get(row.facility_id)));
 }
 
+/** Non-removed reviews of the given facilities, newest first. */
+async function listFacilityReviews(db: Db, facilities: ReviewSearchFacilities, limit: number): Promise<Review[]> {
+  const names = new Map(facilities.map((f) => [f.id, f.name]));
+  const { data, error } = await db
+    .from('reviews')
+    .select(REVIEW_COLUMNS)
+    .in('facility_id', [...names.keys()])
+    .is('removed_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw fromDatabaseError(error);
+  return data.map((row) => toReview(row, names.get(row.facility_id)));
+}
+
 export interface ReviewSnippet {
   reviewId: string;
   facilityId: string;
@@ -66,28 +80,40 @@ export interface ReviewSearchResult {
   reviews: ReviewSnippet[];
 }
 
+/** Restricts a review search to these facilities (e.g. the station's active water facilities). */
+export type ReviewSearchFacilities = { id: string; name: string }[];
+
 /**
  * Reviews for the search_reviews chatbot tool: the closest matches to `queryVector`
  * (match_reviews), or the latest reviews when the vector is missing or the search fails.
+ * With `onlyFacilities`, only reviews of those facilities count. match_reviews cannot filter
+ * by facility, so it is asked for more rows and the result is filtered and cut to `limit`.
  */
 export async function searchStationReviews(
   db: Db,
   stationId: string,
   queryVector: number[] | null,
   limit: number = APP_CONFIG.REVIEW_SEARCH_LIMIT,
+  onlyFacilities?: ReviewSearchFacilities,
 ): Promise<ReviewSearchResult> {
   const snippet = (comment: string) => reviewSnippet(comment, APP_CONFIG.REVIEW_SNIPPET_MAX_CHARS);
+  if (onlyFacilities && onlyFacilities.length === 0) return { method: queryVector ? 'semantic' : 'latest', reviews: [] };
+  const allowed = onlyFacilities ? new Set(onlyFacilities.map((f) => f.id)) : null;
+  const matchCount = allowed ? Math.min(limit * APP_CONFIG.REVIEW_SEARCH_OVERFETCH, 50) : limit;
 
   if (queryVector) {
     const [{ data: matches, error }, { data: facilities, error: facilityError }] = await Promise.all([
-      db.rpc('match_reviews', { query_embedding: toPgVector(queryVector), p_station_id: stationId, match_count: limit }),
-      db.from('facilities').select('id, name').eq('station_id', stationId),
+      db.rpc('match_reviews', { query_embedding: toPgVector(queryVector), p_station_id: stationId, match_count: matchCount }),
+      onlyFacilities
+        ? Promise.resolve({ data: onlyFacilities, error: null })
+        : db.from('facilities').select('id, name').eq('station_id', stationId),
     ]);
     if (!error && !facilityError) {
       const names = new Map(facilities.map((f) => [f.id, f.name]));
+      const kept = allowed ? matches.filter((m) => allowed.has(m.facility_id)).slice(0, limit) : matches;
       return {
         method: 'semantic',
-        reviews: matches.map((m) => ({
+        reviews: kept.map((m) => ({
           reviewId: m.review_id,
           facilityId: m.facility_id,
           facilityName: names.get(m.facility_id) ?? '',
@@ -100,7 +126,9 @@ export async function searchStationReviews(
     console.error('Review search failed, using latest reviews:', error?.code ?? facilityError?.code ?? 'unknown');
   }
 
-  const latest = await listStationReviews(db, stationId, limit);
+  const latest = onlyFacilities
+    ? await listFacilityReviews(db, onlyFacilities, limit)
+    : await listStationReviews(db, stationId, limit);
   return {
     method: 'latest',
     reviews: latest.map((r) => ({

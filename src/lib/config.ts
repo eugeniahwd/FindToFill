@@ -30,6 +30,8 @@ export const APP_CONFIG = {
   // search_reviews tool: top matches, each comment cut to this length (URLs removed).
   REVIEW_SEARCH_LIMIT: 5,
   REVIEW_SNIPPET_MAX_CHARS: 300,
+  // match_reviews cannot filter by facility type: ask for limit x this, then filter (max 50 rows).
+  REVIEW_SEARCH_OVERFETCH: 4,
 
   // Train schedules (get_next_train tool). Station clocks run on WIB; Sat/Sun use the weekend timetable.
   TIMEZONE: 'Asia/Jakarta',

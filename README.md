@@ -194,7 +194,7 @@ Each card has `name`, `platform`, `locationDetail`, `distanceM`, `walkTimeMin`, 
 
 **Pilot stations:** 3, as in the seed data: Manggarai, Sudirman, and Tebet. `docs/SPEC.md` §3 still names 5; SPEC lets the team change the list, and the seed data is the source.
 
-**Which answers you get** depends on `CHATBOT_MODE` (details in [AI module handoff](#ai-module-handoff)). With the defaults (`stub`), only Manggarai has data (`stationId: "station-manggarai"` or GPS near Manggarai), and the stub's distances are canned. With `CHATBOT_MODE=fake` or `live`, the three demo pilot stations `station-manggarai`, `station-sudirman`, and `station-tebet` answer, by `stationId` or by GPS near them. Any other `stationId`, including real database ids before `CHATBOT_DATA=supabase` is wired, gets the no-data fallback with the station picker.
+**Which answers you get** depends on `CHATBOT_MODE` (details in [AI module handoff](#ai-module-handoff)). With the defaults (`stub`), only Manggarai has data (`stationId: "station-manggarai"` or GPS near Manggarai), and the stub's distances are canned. With `CHATBOT_MODE=fake` or `live`, the three demo pilot stations `station-manggarai`, `station-sudirman`, and `station-tebet` answer, by `stationId` or by GPS near them. Those demo ids exist only with `CHATBOT_DATA=fake`. With `CHATBOT_DATA=supabase` the chatbot reads the same database as the map, so it answers for the real pilot station ids (UUIDs) and sees the latest reports. Any `stationId` the data source does not know gets the no-data fallback with the station picker.
 
 **Rate limit:** 20 requests per hour per client. The key comes from Backend's `chatRateLimitKey()`: the user id when signed in (supabase mode), otherwise an HMAC of the IP with `IP_HASH_SALT`. Production must set `IP_HASH_SALT`; without it every chat request returns 500. With `CHATBOT_DATA=fake` the count is kept in memory per server instance, so restarting `npm run dev` or a Vercel cold start resets it. With `CHATBOT_DATA=supabase` it is stored in `rate_limit_events`.
 
@@ -215,15 +215,18 @@ The chatbot answers only the 5 quick messages. Every fact (station, facility, st
 | `CHATBOT_DATA` | Data, rate limit, logs |
 |---|---|
 | `fake` (default) | Demo data for the 3 pilot stations, in-memory rate limit, one `[chat]` console line per request |
-| `supabase` | Backend's provider, `rate_limit_events`, `chat_logs`. Needs the Supabase keys. Answers `fallback_ai_unavailable` until the provider below is plugged in. |
+| `supabase` | Backend's `SupabaseDataProvider` (same tables and rules as the map), `rate_limit_events`, `chat_logs`. Needs the Supabase keys; `GEMINI_API_KEY` for semantic review search (without it, the latest reviews are used). Use this in production. |
 
 An unknown value in either variable gives `fallback_ai_unavailable`, never demo data under another name. Logs hold only the question id, outcome, latency, tool names, and (in `chat_logs`) the station id: no coordinates, review text, or keys.
 
-### Plugging in SupabaseDataProvider (Backend)
+### SupabaseDataProvider (Backend)
 
-1. Implement `ChatbotDataProvider` from [`src/lib/chatbot/data/provider.ts`](src/lib/chatbot/data/provider.ts) outside `src/lib/chatbot` (that folder never imports Supabase).
-2. Run the shared contract tests against it: call `runProviderContractTests('SupabaseDataProvider', (seed) => ...)` from [`tests/chatbot/provider.contract.ts`](tests/chatbot/provider.contract.ts) in a test file of your own, as [`tests/chatbot/fakeProvider.test.ts`](tests/chatbot/fakeProvider.test.ts) does. The factory gets a `ProviderSeed` and returns a provider over exactly that data.
-3. Return it from `createSupabaseProvider()` in [`src/app/api/chat/deps.ts`](src/app/api/chat/deps.ts). Nothing else changes: the rate limiter and the chat logger are already wired for `CHATBOT_DATA=supabase`.
+[`src/lib/data/chatbotProvider.ts`](src/lib/data/chatbotProvider.ts) implements `ChatbotDataProvider` on the Backend's data helpers, and `createSupabaseProvider()` in [`src/app/api/chat/deps.ts`](src/app/api/chat/deps.ts) returns it for `CHATBOT_DATA=supabase`.
+
+- **Same facts as the map:** pilot stations, active facilities, and the facility status rule of the `facility_status` view (newest non-removed report of the last 7 days wins). The status is read from `reports` so the window follows the request time.
+- **Reviews:** `searchStationReviews` with the query embedded by Gemini (`embedQueryCached`), limited to the station's active facilities of the asked type. Without a query vector, or if `match_reviews` fails, it returns the latest reviews.
+- **Safety:** it only reads. It uses the service-role client, so it filters removed reports and reviews and inactive facilities itself. Ids that are not UUIDs never reach the database. It never receives the user's coordinates.
+- **Tests:** [`tests/chatbotSupabaseProvider.test.ts`](tests/chatbotSupabaseProvider.test.ts) runs the shared contract tests ([`tests/chatbot/provider.contract.ts`](tests/chatbot/provider.contract.ts)) on the real provider code over an in-memory copy of the seed tables ([`tests/helpers/memorySupabase.ts`](tests/helpers/memorySupabase.ts)), plus the semantic search path. No remote database is touched.
 
 ### Evaluation
 
