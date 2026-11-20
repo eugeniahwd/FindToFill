@@ -25,6 +25,7 @@ function mockLocation(overrides: Partial<ReturnType<typeof useLocation>> = {}) {
     detectedStation: station,
     selectedStation: station,
     selectStation: jest.fn(),
+    isStationPickedManually: false,
     isFarFromPilotStations: false,
     distanceToSelectedStationM: null,
     showStationPicker: false,
