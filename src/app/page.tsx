@@ -10,7 +10,6 @@ import { NextTrainCard } from '@/components/trains/NextTrainCard';
 import { useNow } from '@/components/trains/useNow';
 import { serviceClock } from '@/lib/trains/clock';
 import { mapTrains } from '@/lib/trains/mapTrains';
-import { directionSlides } from '@/lib/trains/nextTrains';
 import { useLocation } from '@/context/LocationContext';
 import { stationService } from '@/lib/services/stationService';
 import { FacilityWithStatus } from '@/lib/types';
@@ -49,11 +48,9 @@ export default function HomePage() {
   const retry = useCallback(() => setLoadAttempt((n) => n + 1), []);
 
   // Schedule-estimated trains around the selected station, refreshed every few seconds.
+  // The next-train card's "perkiraan dari jadwal KAI" note covers these map trains too.
   const now = useNow();
-  const clock = serviceClock(now);
-  const trains = mapTrains(selectedStation.name, clock);
-  // Keep the note steady for stations with a timetable instead of popping in with each train.
-  const hasTrainData = directionSlides(selectedStation.name, clock).length > 0;
+  const trains = mapTrains(selectedStation.name, serviceClock(now));
 
   return (
     <div className="fixed inset-0 z-0 w-full max-w-md mx-auto map-under-nav">
@@ -80,12 +77,6 @@ export default function HomePage() {
         <StationHeader />
         <NextTrainCard stationName={selectedStation.name} />
         <FacilityLoadStatus state={loadState} isEmpty={facilities.length === 0} onRetry={retry} />
-        {hasTrainData && (
-          <div role="note" className="self-start flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/95 shadow-md text-xs font-medium text-slate-600">
-            <span className="h-2 w-2 rounded-full bg-[#00628C]" aria-hidden="true" />
-            <span>Posisi kereta: perkiraan dari jadwal</span>
-          </div>
-        )}
       </div>
 
       {/* Facility detail, opened by clicking a marker */}

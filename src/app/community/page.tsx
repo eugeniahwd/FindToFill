@@ -213,18 +213,21 @@ export default function CommunityPage() {
       {activeTab === 'reviews' && (
         <div className="flex flex-col gap-3.5">
           {/* Station Selector Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+          {/* Equal-width chips with centred names, so the row lines up on a 360 px phone. */}
+          <div className="flex items-stretch gap-1.5 py-1">
             {stations.map((st) => (
               <button
                 key={st.id}
                 onClick={() => setSelectedStationId(st.id)}
-                className={`min-touch-target px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border ${
+                aria-label={`Stasiun ${st.name}`}
+                aria-pressed={selectedStationId === st.id}
+                className={`min-touch-target flex-1 basis-0 min-w-0 px-2 py-1.5 rounded-full text-xs font-semibold inline-flex items-center justify-center text-center transition-colors border ${
                   selectedStationId === st.id
                     ? 'bg-[#011638] text-white border-[#011638]'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                Stasiun {st.name}
+                <span className="truncate">{st.name}</span>
               </button>
             ))}
           </div>

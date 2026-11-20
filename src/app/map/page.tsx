@@ -8,6 +8,7 @@ import { useLocation } from '@/context/LocationContext';
 import { stationService } from '@/lib/services/stationService';
 import { Station, FacilityWithStatus } from '@/lib/types';
 import { MapPin, ChevronUp, List } from 'lucide-react';
+import { useSheetDrag } from '@/components/common/useSheetDrag';
 
 export default function MapPage() {
   const { selectedStation, selectStation, coords } = useLocation();
@@ -16,6 +17,7 @@ export default function MapPage() {
   const [facilities, setFacilities] = useState<FacilityWithStatus[]>([]);
   const [filter, setFilter] = useState<FilterValue>('all');
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
+  const { handleProps, dragOffset, isDragging } = useSheetDrag(isSheetExpanded, setIsSheetExpanded);
 
   useEffect(() => {
     async function loadData() {
@@ -93,16 +95,23 @@ export default function MapPage() {
         />
       </div>
 
-      {/* Slide-Up Bottom Sheet Drawer with Facility List */}
+      {/* Slide-Up Bottom Sheet Drawer with Facility List: drag the handle up or down, or tap it */}
       <div
-        className={`absolute left-0 right-0 bottom-0 z-30 bg-white rounded-t-3xl shadow-2xl border-t border-slate-200 transition-all duration-300 flex flex-col ${
-          isSheetExpanded ? 'h-[65vh]' : 'h-24'
-        }`}
+        className={`absolute left-0 right-0 bottom-0 z-30 bg-white rounded-t-3xl shadow-2xl border-t border-slate-200 flex flex-col ${
+          isDragging ? '' : 'transition-all duration-300'
+        } ${isSheetExpanded ? 'h-[65vh]' : 'h-24'}`}
+        style={
+          isDragging
+            ? { height: `clamp(6rem, calc(${isSheetExpanded ? '65vh' : '6rem'} - ${dragOffset}px), 85vh)` }
+            : undefined
+        }
       >
         {/* Drag Handle & Toggle Header */}
         <button
-          onClick={() => setIsSheetExpanded((prev) => !prev)}
-          className="min-touch-target w-full pt-2.5 pb-2 px-4 flex flex-col items-center justify-center shrink-0 hover:bg-slate-50 transition-colors"
+          type="button"
+          {...handleProps}
+          aria-expanded={isSheetExpanded}
+          className="min-touch-target w-full pt-2.5 pb-2 px-4 flex flex-col items-center justify-center shrink-0 hover:bg-slate-50 transition-colors touch-none select-none cursor-grab active:cursor-grabbing"
           aria-label={isSheetExpanded ? 'Kecilkan daftar' : 'Buka daftar fasilitas'}
         >
           <div className="w-10 h-1.5 rounded-full bg-slate-300 mb-2" />
