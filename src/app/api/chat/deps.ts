@@ -12,6 +12,8 @@ import 'server-only';
 import { ApiError } from '@/lib/api/errors';
 import { chatRateLimitKey, consumeRateLimit, type RateLimitRule } from '@/lib/rate-limit';
 import { logChat } from '@/lib/data/chatLogs';
+import { SupabaseDataProvider } from '@/lib/data/chatbotProvider';
+import { embedQueryCached } from '@/lib/gemini/embeddings';
 import { getChatModel, getGroqClient } from '@/lib/groq/client';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
@@ -63,7 +65,7 @@ export async function buildChatDeps(
   const mode = resolveMode(env.CHATBOT_MODE);
   const source = resolveDataSource(env.CHATBOT_DATA);
   const { supabaseProvider, ...infra } =
-    source === 'supabase' ? await supabaseInfra(headers) : memoryInfra(headers);
+    source === 'supabase' ? await supabaseInfra(headers, now) : memoryInfra(headers);
   const base = { ...infra, clock: fixedClock(now) };
 
   if (mode === 'stub') return { ...base, answer: 'stub', provider: null, llm: null };
@@ -92,23 +94,28 @@ function memoryInfra(headers: Headers): Infra {
   };
 }
 
-async function supabaseInfra(headers: Headers): Promise<Infra> {
+async function supabaseInfra(headers: Headers, now: Date): Promise<Infra> {
   const admin = createSupabaseAdminClient();
   return {
     rateLimiter: new DatabaseRateLimiter((key, rule) => consumeRateLimit(admin, key, rule)),
     logger: { log: (entry) => logChat(admin, entry) },
     identity: chatRateLimitKey(headers, await signedInUserId(headers)),
-    supabaseProvider: createSupabaseProvider(),
+    supabaseProvider: createSupabaseProvider(admin, now),
   };
 }
 
 /**
- * Swap point for the Backend: return their SupabaseDataProvider here, built with the admin or
- * server client, and run tests/chatbot/provider.contract.ts against it. Until then supabase
- * mode answers fallback_ai_unavailable.
+ * The Backend's SupabaseDataProvider (src/lib/data/chatbotProvider.ts), checked by
+ * tests/chatbot/provider.contract.ts in tests/chatbotSupabaseProvider.test.ts.
+ * The admin client gives every request the same read path, guest or signed in, without a
+ * cookie-bound client. The provider only reads, and filters removed reports and reviews and
+ * inactive facilities itself (RLS does not apply to the service role).
  */
-function createSupabaseProvider(): ChatbotDataProvider | null {
-  return null;
+function createSupabaseProvider(
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  now: Date,
+): ChatbotDataProvider {
+  return new SupabaseDataProvider(admin, { now: () => now, embedQuery: embedQueryCached });
 }
 
 function llmClient(mode: Exclude<ChatbotMode, 'stub'>): LLMClient | null {

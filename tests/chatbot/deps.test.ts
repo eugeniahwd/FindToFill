@@ -25,6 +25,7 @@ import {
   resolveMode,
 } from '../../src/app/api/chat/deps';
 import { ApiError } from '../../src/lib/api/errors';
+import { SupabaseDataProvider } from '../../src/lib/data/chatbotProvider';
 import { logChat } from '../../src/lib/data/chatLogs';
 import { consumeRateLimit } from '../../src/lib/rate-limit';
 import { createSupabaseServerClient } from '../../src/lib/supabase/server';
@@ -32,7 +33,6 @@ import { RATE_LIMIT_CHAT, RATE_LIMIT_WINDOW_SEC } from '../../src/lib/chatbot/co
 import { FakeLLMClient } from '../../src/lib/chatbot/llm/fakeLlmClient';
 import { GroqLLMClient } from '../../src/lib/chatbot/llm/groqClient';
 import type { ChatLogEntry } from '../../src/lib/chatbot/logger';
-import { handleChat } from '../../src/lib/chatbot/orchestrator';
 import { InMemoryRateLimiter } from '../../src/lib/chatbot/rateLimit';
 
 const ADMIN = { admin: true };
@@ -197,20 +197,9 @@ describe('buildChatDeps with CHATBOT_DATA=supabase', () => {
     expect(expired.identity).toBe(guest.identity);
   });
 
-  it('answers fallback_ai_unavailable until the Backend provider is wired in', async () => {
+  it('reads chatbot data through the Backend SupabaseDataProvider', async () => {
     const deps = await buildChatDeps(headers(), ENV);
-    expect(deps.provider).toBeNull();
-
-    const { status, response } = await handleChat(
-      { quickMessageId: 'nearest_water', stationId: 'station-manggarai' },
-      deps,
-    );
-    expect(status).toBe(200);
-    expect(response.outcome).toBe('fallback_ai_unavailable');
-    expect(logChat).toHaveBeenCalledWith(
-      ADMIN,
-      expect.objectContaining({ outcome: 'fallback_ai_unavailable' }),
-    );
+    expect(deps.provider).toBeInstanceOf(SupabaseDataProvider);
   });
 
   it('keeps the stub answers but still uses the database limiter in stub mode', async () => {
