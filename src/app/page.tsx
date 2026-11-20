@@ -6,6 +6,7 @@ import { StationHeader } from '@/components/layout/StationHeader';
 import { FacilityCard } from '@/components/facility/FacilityCard';
 import { MapView } from '@/components/map/MapView';
 import { BottomSheet } from '@/components/common/BottomSheet';
+import { NextTrainCard } from '@/components/trains/NextTrainCard';
 import { useLocation } from '@/context/LocationContext';
 import { stationService } from '@/lib/services/stationService';
 import { FacilityWithStatus } from '@/lib/types';
@@ -64,6 +65,7 @@ export default function HomePage() {
       {/* Floating station card on top of the map */}
       <div className="absolute top-3 left-3 right-3 z-20 flex flex-col gap-2 pt-[env(safe-area-inset-top)]">
         <StationHeader />
+        <NextTrainCard stationName={selectedStation.name} />
         <FacilityLoadStatus state={loadState} isEmpty={facilities.length === 0} onRetry={retry} />
       </div>
 
