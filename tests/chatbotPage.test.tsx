@@ -135,6 +135,26 @@ describe('ChatbotPage', () => {
     );
   });
 
+  it('sends the shown station when GPS is far from every pilot station', async () => {
+    mockLocation({ isFarFromPilotStations: true });
+    reply(200);
+    render(<ChatbotPage />);
+
+    await userEvent.click(waterButton());
+    expect(chatbotService.ask).toHaveBeenCalledWith(
+      expect.objectContaining({ coords: gps, stationId: 'station-manggarai' }),
+    );
+  });
+
+  it('shows the station picker on the chatbot page and lets the user pick a station', async () => {
+    const location = mockLocation({ showStationPicker: true });
+    render(<ChatbotPage />);
+
+    expect(screen.getByText('Pilih Stasiun KRL')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Stasiun Manggarai/ }));
+    expect(location.selectStation).toHaveBeenCalledWith(station);
+  });
+
   it('opens the station picker when the server needs a station', async () => {
     const location = mockLocation({ coords: null });
     reply(200, { outcome: 'fallback_no_data', needsStationSelection: true, detectedStation: null });

@@ -17,6 +17,7 @@ import { chatbotService, getChatSessionId } from '@/lib/services/chatbotService'
 import { QUICK_MESSAGES } from '@/lib/chatbot/quickMessages';
 import type { ChatCard, ChatResponse, DetectedStation, QuickMessageId } from '@/lib/chatbot/contract';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { StationPickerSheet } from '@/components/layout/StationPickerSheet';
 import { formatDistance } from '@/lib/utils/geo';
 import { formatTimeAgo } from '@/lib/utils/status';
 
@@ -56,7 +57,8 @@ function toBotTurn(status: number, response: ChatResponse): ChatTurn {
 }
 
 export default function ChatbotPage() {
-  const { selectedStation, coords, isStationPickedManually, setShowStationPicker } = useLocation();
+  const { selectedStation, coords, isStationPickedManually, isFarFromPilotStations, setShowStationPicker } =
+    useLocation();
 
   const [conversation, setConversation] = useState<ChatTurn[]>([
     { id: 'welcome-1', sender: 'bot', text: WELCOME_MESSAGE },
@@ -96,9 +98,9 @@ export default function ChatbotPage() {
     ]);
     setIsThinking(true);
 
-    // GPS decides the station unless the user picked one by hand; without GPS, send the
-    // station the app shows so the server can still answer.
-    const sendStationId = isStationPickedManually || coords === null;
+    // GPS decides the station only when it is at a pilot station. Otherwise send the station the
+    // app shows (picked by hand, default without GPS, or the nearest one when GPS is far away).
+    const sendStationId = isStationPickedManually || coords === null || isFarFromPilotStations;
     const { status, response } = await chatbotService.ask({
       quickMessageId: msgId,
       coords,
@@ -277,6 +279,8 @@ export default function ChatbotPage() {
           ))}
         </div>
       </footer>
+
+      <StationPickerSheet />
     </div>
   );
 }
