@@ -96,20 +96,27 @@ const LeafletInnerMap = dynamic(
           tooltipAnchor: [0, -18],
         });
 
-        // Trains: a small pill in the line colour, one cached icon per colour.
+        // Trains: a long car in the line colour, turned to run along the track. The light window
+        // marks the front. Icons are cached per colour and 5° step so they are not rebuilt every tick.
         const trainIcons = new Map<string, import('leaflet').DivIcon>();
-        const trainIcon = (color: string) => {
-          let icon = trainIcons.get(color);
+        const trainIcon = (color: string, heading: number) => {
+          const angle = (Math.round(heading / 5) * 5) % 360;
+          const key = `${color}|${angle}`;
+          let icon = trainIcons.get(key);
           if (!icon) {
             icon = L.divIcon({
               className: 'train-marker',
-              html: `<div style="width:24px;height:14px;border-radius:5px 8px 8px 5px;background:${color};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>`,
-              iconSize: [24, 14],
-              iconAnchor: [12, 7],
-              popupAnchor: [0, -10],
-              tooltipAnchor: [12, 0],
+              html:
+                `<div style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;transform:rotate(${angle}deg);">` +
+                `<div style="position:relative;box-sizing:border-box;width:13px;height:28px;border-radius:7px 7px 4px 4px;background:${color};border:2px solid #ffffff;box-shadow:0 2px 6px rgba(0,0,0,0.35);">` +
+                '<div style="position:absolute;top:2px;left:2px;right:2px;height:5px;border-radius:3px 3px 1px 1px;background:#C8E6FF;"></div>' +
+                '</div></div>',
+              iconSize: [30, 30],
+              iconAnchor: [15, 15],
+              popupAnchor: [0, -14],
+              tooltipAnchor: [14, 0],
             });
-            trainIcons.set(color, icon);
+            trainIcons.set(key, icon);
           }
           return icon;
         };
@@ -189,7 +196,7 @@ const LeafletInnerMap = dynamic(
 
             {/* Trains placed on the track by schedule (estimates, not live positions) */}
             {trains.map((train) => (
-              <Marker key={train.key} position={train.position} icon={trainIcon(train.color)} title={`KA ${train.detail.train}`}>
+              <Marker key={train.key} position={train.position} icon={trainIcon(train.color, train.heading)} title={`KA ${train.detail.train}`}>
                 <Tooltip permanent direction="right" className="train-tooltip">
                   <span className="text-[10px] font-bold text-navy">{train.label}</span>
                 </Tooltip>

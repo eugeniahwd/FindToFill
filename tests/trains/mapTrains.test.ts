@@ -1,4 +1,4 @@
-import { mapTrains, pointAlong } from '@/lib/trains/mapTrains';
+import { headingAlong, mapTrains, pointAlong } from '@/lib/trains/mapTrains';
 import { STATION_COORDS } from '@/lib/trains/segments';
 import type { ServiceClock } from '@/lib/trains/clock';
 
@@ -23,7 +23,36 @@ describe('pointAlong', () => {
   });
 });
 
+describe('headingAlong', () => {
+  // Degrees clockwise from north, following the direction of travel.
+  it.each([
+    ['north', [[0, 0], [0.001, 0]], 0],
+    ['east', [[0, 0], [0, 0.001]], 90],
+    ['south', [[0.001, 0], [0, 0]], 180],
+    ['west', [[0, 0.001], [0, 0]], 270],
+  ] as const)('points %s along a straight track', (_dir, path, expected) => {
+    expect(headingAlong(path as unknown as [number, number][], 0.5)).toBeCloseTo(expected, 5);
+  });
+
+  it('uses the piece of track the train is on', () => {
+    const bend: [number, number][] = [
+      [0, 0],
+      [0, 0.001], // east first
+      [0.002, 0.001], // then north (longer piece)
+    ];
+    expect(headingAlong(bend, 0.1)).toBeCloseTo(90, 5);
+    expect(headingAlong(bend, 0.9)).toBeCloseTo(0, 5);
+  });
+});
+
 describe('mapTrains', () => {
+  it('turns KA 1125 to face its way along the track (Cawang to Tebet runs roughly north)', () => {
+    const ka = mapTrains('Tebet', weekday(276.5)).find((t) => t.detail.train === '1125');
+    const heading = ka!.heading;
+    expect(heading >= 0 && heading < 360).toBe(true);
+    expect(heading > 315 || heading < 45).toBe(true);
+  });
+
   it('places KA 1125 between Cawang and Tebet halfway through its run', () => {
     const trains = mapTrains('Tebet', weekday(276.5));
     const ka = trains.find((t) => t.detail.train === '1125');
