@@ -121,7 +121,7 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 
 1. Create a project at [supabase.com](https://supabase.com) on the **Free** plan (no payment card). Region: Southeast Asia (Singapore).
 2. Project Settings → API: copy the URL, the `anon` key, and the `service_role` key into `.env.local`.
-3. SQL Editor: run the files in `supabase/migrations/` **in filename order** (`...0001`, `...0002`, `...0003`).
+3. SQL Editor: run the files in `supabase/migrations/` **in filename order** (`20261101000001` to `...0003`, then `20261126000001_server_side_writes.sql`). The last one removes client writes to reports, reviews, and report photos: route handlers check the user, photo, and rate limit, then write with the service role.
 4. Authentication → Sign In / Providers → Email: for the prototype, turn **off** "Confirm email" (otherwise new users must click the email link before logging in).
 5. Check the CSV files, then run `npm run db:seed -- --dry-run` (validation only) and `npm run db:seed`.
 6. Register an account in the app, then make it admin in the SQL Editor:
@@ -137,7 +137,7 @@ Supabase (free plan) provides PostgreSQL + pgvector, Auth, and Storage. Backend 
 
 Restart `npm run dev` after editing `.env.local`. Each teammate should create their own free keys instead of sharing one.
 
-When a migration is added later, run only the new file. Keep `src/lib/supabase/database.types.ts` in sync with the schema.
+When a migration is added later, run only the new file. Keep `src/lib/supabase/database.types.ts` in sync with the schema. Run `20261126000001_server_side_writes.sql` together with deploying the code that writes reports and reviews through the service role: older code gets 403 on those writes once it is applied.
 
 ### Production Build
 

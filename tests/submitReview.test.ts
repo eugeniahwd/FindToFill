@@ -18,31 +18,35 @@ function reviewRow(over: Partial<ReviewRow> = {}): ReviewRow {
   };
 }
 
+// The user session only reads the facility. Clients have no insert or update on reviews
+// (RLS), so the lookup, insert, and update use the service role.
 function setup(over: Partial<Record<string, () => FakeResult>> = {}, vector: number[] | null = [0.6, 0.8]) {
   const db = fakeSupabase({
     'facilities.select': () => ({ data: { id: FACILITY, name: 'Water Station Concourse L2' } }),
-    'reviews.select': () => ({ data: null }),
-    'reviews.insert': () => ({ data: reviewRow() }),
-    'reviews.update': () => ({ data: reviewRow({ rating: 2 }) }),
     ...over,
   });
   const admin = fakeSupabase({
     'rate_limit_events.select': () => ({ count: 0 }),
     'rate_limit_events.insert': () => ({}),
     'stamps.upsert': () => ({ data: [{ user_id: USER }] }),
+    'reviews.select': () => ({ data: null }),
+    'reviews.insert': () => ({ data: reviewRow() }),
+    'reviews.update': () => ({ data: reviewRow({ rating: 2 }) }),
     ...over,
   });
   const embed = jest.fn(async () => vector);
   return { db, admin, embed, deps: { db: db.client, admin: admin.client, embed } };
 }
 
+const existingReview = { 'reviews.select': () => ({ data: { id: 'rev-1', removed_at: null } }) };
+
 describe('submitReview', () => {
   it('creates the first review with its embedding and awards the stamp', async () => {
-    const { db, admin, embed, deps } = setup();
+    const { admin, embed, deps } = setup();
     const result = await submitReview(deps, { userId: USER, input });
 
     expect(embed).toHaveBeenCalledWith(input.comment, 'document');
-    expect(db.find('reviews.insert')[0].payload).toEqual({
+    expect(admin.find('reviews.insert')[0].payload).toEqual({
       facility_id: FACILITY, user_id: USER, rating: 4, comment: input.comment, embedding: '[0.6,0.8]',
     });
     expect(admin.find('stamps.upsert')).toHaveLength(1);
@@ -53,38 +57,48 @@ describe('submitReview', () => {
   });
 
   it('edits the existing review with an update (not an upsert) and awards no stamp', async () => {
-    const { db, admin, deps } = setup({ 'reviews.select': () => ({ data: { id: 'rev-1' } }) });
+    const { admin, deps } = setup(existingReview);
     const result = await submitReview(deps, { userId: USER, input: { ...input, rating: 2 } });
 
-    const [update] = db.find('reviews.update');
-    // Only the columns users are granted to update.
+    const [update] = admin.find('reviews.update');
+    // Only the review content: never the owner, facility, or moderation columns.
     expect(update.payload).toEqual({ rating: 2, comment: input.comment, embedding: '[0.6,0.8]' });
     expect(update.filters).toEqual([['eq', 'id', 'rev-1']]);
-    expect(db.find('reviews.insert')).toHaveLength(0);
+    expect(admin.find('reviews.insert')).toHaveLength(0);
     expect(admin.find('stamps.upsert')).toHaveLength(0);
     expect(result).toMatchObject({ created: false, stampAwarded: false });
   });
 
   it('looks up only the signed-in user’s review for this facility', async () => {
-    const { db, deps } = setup();
+    const { admin, deps } = setup();
     await submitReview(deps, { userId: USER, input });
-    expect(db.find('reviews.select')[0].filters).toEqual([
+    expect(admin.find('reviews.select')[0].filters).toEqual([
       ['eq', 'user_id', USER],
       ['eq', 'facility_id', FACILITY],
     ]);
   });
 
+  it('returns 409 and changes nothing when a moderator removed the user’s review', async () => {
+    const { admin, embed, deps } = setup({
+      'reviews.select': () => ({ data: { id: 'rev-1', removed_at: '2026-11-20T08:00:00Z' } }),
+    });
+    await expect(submitReview(deps, { userId: USER, input })).rejects.toMatchObject({ status: 409, code: 'CONFLICT' });
+    expect(admin.find('reviews.update')).toHaveLength(0);
+    expect(admin.find('reviews.insert')).toHaveLength(0);
+    expect(embed).not.toHaveBeenCalled();
+  });
+
   it('still saves the review with a null embedding when embedding fails', async () => {
-    const { db, deps } = setup({}, null);
+    const { admin, deps } = setup({}, null);
     const result = await submitReview(deps, { userId: USER, input });
-    expect(db.find('reviews.insert')[0].payload).toMatchObject({ embedding: null });
+    expect(admin.find('reviews.insert')[0].payload).toMatchObject({ embedding: null });
     expect(result.created).toBe(true);
   });
 
   it('clears the old vector when an edit cannot be embedded', async () => {
-    const { db, deps } = setup({ 'reviews.select': () => ({ data: { id: 'rev-1' } }) }, null);
+    const { admin, deps } = setup(existingReview, null);
     await submitReview(deps, { userId: USER, input });
-    expect(db.find('reviews.update')[0].payload).toMatchObject({ embedding: null });
+    expect(admin.find('reviews.update')[0].payload).toMatchObject({ embedding: null });
   });
 
   it('returns 404 for a missing or inactive facility before embedding', async () => {
@@ -99,7 +113,7 @@ describe('submitReview', () => {
     expect(embed).not.toHaveBeenCalled();
   });
 
-  it('returns 409 when the user cannot review again (moderated review hidden by RLS)', async () => {
+  it('returns 409 when a concurrent insert wins the one-review-per-facility race', async () => {
     const { deps } = setup({ 'reviews.insert': () => ({ error: { code: '23505', message: 'duplicate' } }) });
     await expect(submitReview(deps, { userId: USER, input })).rejects.toMatchObject({ status: 409, code: 'CONFLICT' });
   });

@@ -144,9 +144,11 @@ export async function searchStationReviews(
 
 /**
  * Creates the user's review for a facility, or edits it if one exists (one per user per
- * facility). Users may only update rating, comment, and embedding (column grants), so this
- * is an explicit insert or update rather than an upsert. `db` acts as the user (RLS);
- * `admin` is the service role (rate_limit_events, stamps).
+ * facility). An edit changes only rating, comment, and embedding, so this is an explicit insert
+ * or update rather than an upsert. `db` acts as the user (reads the facility under RLS).
+ * `admin` is the service role and does every review read and write: clients have no insert or
+ * update on reviews, so the rate limit and the server-made embedding cannot be skipped.
+ * `userId` must come from the verified session.
  */
 export async function submitReview(
   { db, admin, embed }: { db: Db; admin: Db; embed: Embed },
@@ -163,22 +165,23 @@ export async function submitReview(
 
   await assertWithinRateLimit(admin, userId, RATE_LIMITS.review);
 
-  // RLS hides removed reviews, so a moderated review is not found here and the insert conflicts.
-  const { data: existing, error: existingError } = await db
+  // The service role also sees removed reviews: a review a moderator removed stays removed.
+  const { data: existing, error: existingError } = await admin
     .from('reviews')
-    .select('id')
+    .select('id, removed_at')
     .eq('user_id', userId)
     .eq('facility_id', input.facilityId)
     .maybeSingle();
   if (existingError) throw fromDatabaseError(existingError);
+  if (existing?.removed_at) throw new ApiError(409, 'CONFLICT', ALREADY_REVIEWED);
 
   // An edit without a fresh vector stores null, so search never matches the old text.
   const vector = await embed(input.comment, 'document');
   const fields = { rating: input.rating, comment: input.comment, embedding: vector ? toPgVector(vector) : null };
 
   const { data: row, error } = existing
-    ? await db.from('reviews').update(fields).eq('id', existing.id).select(REVIEW_COLUMNS).single()
-    : await db
+    ? await admin.from('reviews').update(fields).eq('id', existing.id).select(REVIEW_COLUMNS).single()
+    : await admin
         .from('reviews')
         .insert({ ...fields, facility_id: input.facilityId, user_id: userId })
         .select(REVIEW_COLUMNS)

@@ -36,6 +36,36 @@ describe('supabase migrations', () => {
     expect(sql).toContain('grant update (removed_at, removed_by) on public.reports to authenticated');
   });
 
+  // Reports, reviews, and report photos are written only by the server (service role), after the
+  // route has checked the session, the photo, and the rate limit.
+  const droppedLater = (create: string, drop: string) => sql.lastIndexOf(drop) > sql.lastIndexOf(create);
+
+  it.each(['reports: insert own', 'reviews: insert own', 'reviews: update own'])(
+    'drop the client write policy "%s"',
+    (name) => {
+      expect(droppedLater(`create policy "${name}"`, `drop policy "${name}"`)).toBe(true);
+    },
+  );
+
+  it.each(['reports', 'reviews'])('revoke client inserts on %s', (table) => {
+    expect(sql).toContain(`revoke insert on public.${table} from anon, authenticated`);
+  });
+
+  it('let clients update only the soft-delete columns of reviews', () => {
+    expect(droppedLater('grant update (rating, comment, embedding', 'revoke update on public.reviews from anon, authenticated')).toBe(true);
+    expect(sql).toContain('grant update (removed_at, removed_by) on public.reviews to authenticated');
+  });
+
+  it('let clients upload nothing to report-photos', () => {
+    const name = 'report-photos: insert own folder';
+    expect(droppedLater(`create policy "${name}"`, `drop policy "${name}" on storage.objects`)).toBe(true);
+  });
+
+  it('cap the sign-up display name in the latest profile trigger', () => {
+    const definitions = [...sql.matchAll(/function public\.handle_new_user\(\)\s+returns trigger[\s\S]*?\$\$;/g)];
+    expect(definitions.at(-1)?.[0]).toMatch(/left\(\s*coalesce\(/);
+  });
+
   it('never let clients write profiles (role cannot be self-assigned)', () => {
     expect(sql).toContain('revoke insert, update, delete on public.profiles from anon, authenticated');
     expect(sql).not.toMatch(/on public\.profiles\s+for (insert|update|delete|all)/);
