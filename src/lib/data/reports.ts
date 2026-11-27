@@ -28,8 +28,9 @@ export interface SubmitReportResult {
 /**
  * Saves a live report: checks the facility and rate limit, uploads the photo to
  * report-photos/{user_id}/{uuid}.{ext}, inserts the report, then awards the stamp.
- * `db` acts as the user (RLS: own folder, own report); `admin` is the service role
- * (rate_limit_events, stamps, cleanup).
+ * `db` acts as the user (reads the facility under RLS). `admin` is the service role and does
+ * every write: clients have no insert on reports or report-photos, so these checks cannot be
+ * skipped by calling Supabase directly. `userId` must come from the verified session.
  */
 export async function submitReport(
   { db, admin }: { db: Db; admin: Db },
@@ -47,14 +48,14 @@ export async function submitReport(
   await assertWithinRateLimit(admin, userId, RATE_LIMITS.report);
 
   const photoPath = `${userId}/${randomUUID()}.${photo.type.ext}`;
-  const upload = await db.storage
+  const upload = await admin.storage
     .from(REPORT_PHOTO_BUCKET)
     .upload(photoPath, photo.bytes, { contentType: photo.type.mime, upsert: false });
   if (upload.error) {
     throw new ApiError(503, 'SERVICE_UNAVAILABLE', 'Could not save the photo. Please try again.');
   }
 
-  const { data: row, error: insertError } = await db
+  const { data: row, error: insertError } = await admin
     .from('reports')
     .insert({
       facility_id: fields.facilityId,

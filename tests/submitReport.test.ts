@@ -22,18 +22,20 @@ function reportRow(path: string): TableRow<'reports'> {
   };
 }
 
+// The user session only reads the facility. Clients have no insert on reports or
+// report-photos (RLS), so the upload and the insert must use the service role.
 function setup(over: Partial<Record<string, () => FakeResult>> = {}) {
   const db = fakeSupabase({
     'facilities.select': () => ({ data: { id: FACILITY } }),
-    'storage.upload': () => ({ data: { path: 'x' } }),
-    'reports.insert': (c) => ({ data: reportRow((c.payload as { photo_path: string }).photo_path) }),
     ...over,
   });
   const admin = fakeSupabase({
     'rate_limit_events.select': () => ({ count: 0 }),
     'rate_limit_events.insert': () => ({}),
     'stamps.upsert': () => ({ data: [{ user_id: USER }] }),
+    'storage.upload': () => ({ data: { path: 'x' } }),
     'storage.remove': () => ({}),
+    'reports.insert': (c) => ({ data: reportRow((c.payload as { photo_path: string }).photo_path) }),
     ...over,
   });
   return { db, admin, deps: { db: db.client, admin: admin.client } };
@@ -41,16 +43,16 @@ function setup(over: Partial<Record<string, () => FakeResult>> = {}) {
 
 describe('submitReport', () => {
   it('uploads the photo to the user folder, saves the report, and awards the first stamp', async () => {
-    const { db, admin, deps } = setup();
+    const { admin, deps } = setup();
     const result = await submitReport(deps, input);
 
-    const [upload] = db.find('storage.upload');
+    const [upload] = admin.find('storage.upload');
     const { bucket, args } = upload.payload as { bucket: string; args: [string, Uint8Array, { contentType: string }] };
     expect(bucket).toBe('report-photos');
     expect(args[0]).toMatch(new RegExp(`^${USER}/[0-9a-f-]{36}\\.jpg$`));
     expect(args[2]).toMatchObject({ contentType: 'image/jpeg', upsert: false });
 
-    expect(db.find('reports.insert')[0].payload).toEqual({
+    expect(admin.find('reports.insert')[0].payload).toEqual({
       facility_id: FACILITY, user_id: USER, status: 'empty', photo_path: args[0], note: 'Galon habis',
     });
     expect(admin.find('stamps.upsert')[0].options).toMatchObject({ ignoreDuplicates: true });
@@ -66,33 +68,33 @@ describe('submitReport', () => {
   });
 
   it('stores an empty note as null', async () => {
-    const { db, deps } = setup();
+    const { admin, deps } = setup();
     await submitReport(deps, { ...input, fields: { ...input.fields, note: undefined } });
-    expect(db.find('reports.insert')[0].payload).toMatchObject({ note: null });
+    expect(admin.find('reports.insert')[0].payload).toMatchObject({ note: null });
   });
 
   it('rejects the 6th report within the hour with 429 before uploading anything', async () => {
-    const { db, deps } = setup({ 'rate_limit_events.select': () => ({ count: 5 }) });
+    const { admin, deps } = setup({ 'rate_limit_events.select': () => ({ count: 5 }) });
     await expect(submitReport(deps, input)).rejects.toMatchObject({ status: 429, code: 'RATE_LIMITED' });
-    expect(db.find('storage.upload')).toHaveLength(0);
+    expect(admin.find('storage.upload')).toHaveLength(0);
   });
 
   it('returns 404 for a missing or inactive facility before uploading', async () => {
-    const { db, deps } = setup({ 'facilities.select': () => ({ data: null }) });
+    const { admin, deps } = setup({ 'facilities.select': () => ({ data: null }) });
     await expect(submitReport(deps, input)).rejects.toMatchObject({ status: 404 });
-    expect(db.find('storage.upload')).toHaveLength(0);
+    expect(admin.find('storage.upload')).toHaveLength(0);
   });
 
   it('returns 503 and saves nothing when the photo upload fails', async () => {
-    const { db, deps } = setup({ 'storage.upload': () => ({ error: { message: 'storage down' } }) });
+    const { admin, deps } = setup({ 'storage.upload': () => ({ error: { message: 'storage down' } }) });
     await expect(submitReport(deps, input)).rejects.toMatchObject({ status: 503 });
-    expect(db.find('reports.insert')).toHaveLength(0);
+    expect(admin.find('reports.insert')).toHaveLength(0);
   });
 
   it('deletes the uploaded photo when the report insert fails', async () => {
-    const { db, admin, deps } = setup({ 'reports.insert': () => ({ error: { code: '42501', message: 'rls' } }) });
-    await expect(submitReport(deps, input)).rejects.toMatchObject({ status: 403 });
-    const uploadedPath = (db.find('storage.upload')[0].payload as { args: [string] }).args[0];
+    const { admin, deps } = setup({ 'reports.insert': () => ({ error: { code: '23503', message: 'fk' } }) });
+    await expect(submitReport(deps, input)).rejects.toMatchObject({ status: 400 });
+    const uploadedPath = (admin.find('storage.upload')[0].payload as { args: [string] }).args[0];
     expect((admin.find('storage.remove')[0].payload as { args: [string[]] }).args[0]).toEqual([uploadedPath]);
   });
 
